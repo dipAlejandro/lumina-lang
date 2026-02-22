@@ -103,11 +103,20 @@ public class Parser {
     return new AST.ProcDecl(name, params, body);
   }
 
-  private AST.If parseIf() {
+  private AST.Node parseIf() {
     consume(IF);
     consume(LPAREN);
     AST.Node condition = parseExpression();
     consume(RPAREN);
+
+    // If arrow
+    if (match(ARROW)) {
+      AST.Node body = parseExpression();
+      matchOptional(SEMICOLON);
+      return new AST.IfArrow(condition, body);
+    }
+
+    // If con bloque    
     AST.Block thenBranch = parseBlock();
     AST.Block elseBranch = null;
     if (match(ELSE)) {
@@ -116,27 +125,45 @@ public class Parser {
     return new AST.If(condition, thenBranch, elseBranch);
   }
 
-  private AST.While parseWhile() {
+  private AST.Node parseWhile() {
     consume(WHILE);
     consume(LPAREN);
     AST.Node condition = parseExpression();
     consume(RPAREN);
+
+    // While arrow
+    if (match(ARROW)) {
+      AST.Node body = parseExpression();
+      matchOptional(SEMICOLON);
+      return new AST.WhileArrow(condition, body);
+    }
+
+    // While con bloque
     AST.Block body = parseBlock();
     return new AST.While(condition, body);
   }
 
-  private AST.For parseFor() {
+  private AST.Node parseFor() {
     consume(FOR);
     consume(LPAREN);
     AST.VarDecl init = parseVarDecl();
     AST.Node condition = parseExpression();
-    matchOptional(SEMICOLON);
+    consume(SEMICOLON);
     // step: identifier = expr
     String stepName = consume(IDENTIFIER).value;
     consume(ASSIGN);
     AST.Node stepVal = parseExpression();
     AST.Assign step = new AST.Assign(stepName, stepVal);
     consume(RPAREN);
+
+    // For arrow
+    if (match(ARROW)) {
+      AST.Node body = parseExpression();
+      matchOptional(SEMICOLON);
+      return new AST.ForArrow(init, condition, step, body);
+    }
+
+    // For con bloque
     AST.Block body = parseBlock();
     return new AST.For(init, condition, step, body);
   }

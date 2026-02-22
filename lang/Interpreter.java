@@ -63,10 +63,22 @@ public class Interpreter {
         yield null;
       }
 
+      case AST.IfArrow ia -> {
+        if(isTruthy(evaluate(ia.condition(), env))) evaluate(ia.body(), env);
+
+        yield null;
+      }
+
       case AST.While w -> {
         while (isTruthy(evaluate(w.condition(), env))) {
           executeBlock(w.body(), new Environment(env));
         }
+        yield null;
+      }
+
+      case AST.WhileArrow wa -> {
+        while (isTruthy(evaluate(wa.condition(), env))) evaluate(wa.body(), env);
+
         yield null;
       }
 
@@ -75,7 +87,17 @@ public class Interpreter {
         execute(f.init(), forEnv);
         while (isTruthy(evaluate(f.condition(), forEnv))) {
           executeBlock(f.body(), new Environment(forEnv));
-          execute(f.step(), forEnv);
+          evaluate(f.step(), forEnv);
+        }
+        yield null;
+      }
+
+      case AST.ForArrow fa -> {
+        Environment forEnv = new Environment(env);
+        execute(fa.init(), forEnv);
+        while (isTruthy(evaluate(fa.condition(), forEnv))) {
+          evaluate(fa.body(), forEnv);
+          evaluate(fa.step(), forEnv);
         }
         yield null;
       }
