@@ -20,10 +20,10 @@ public class Lexer {
     EQ, NEQ, LT, LTE, GT, GTE,
     AND, OR, NOT,
     ASSIGN,
-    QUESTION_MARK,
+    QUESTION,
     ARROW,
     // Delimiters
-    LPAREN, RPAREN, LBRACE, RBRACE, COMMA, SEMICOLON,
+    LPAREN, RPAREN, LBRACE, RBRACE, COMMA,COLON, SEMICOLON,
     // Control
     EOF
   }
@@ -122,7 +122,8 @@ public class Lexer {
             case '}' -> tokens.add(new Token(TokenType.RBRACE, "}", line));
             case ',' -> tokens.add(new Token(TokenType.COMMA,  ",", line));
             case ';' -> tokens.add(new Token(TokenType.SEMICOLON, ";", line));
-            case '?' -> tokens.add(new Token(TokenType.QUESTION_MARK,"?", line ));
+            case '?' -> tokens.add(new Token(TokenType.QUESTION,"?", line ));
+            case ':' -> tokens.add(new Token(TokenType.COLON, ":", line));
             case '=' -> {
                 if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.EQ, "==", line)); }
                 else tokens.add(new Token(TokenType.ASSIGN, "=", line));

@@ -1,7 +1,9 @@
 package lang;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import lang.Lexer.Token;
 import lang.Lexer.TokenType;
@@ -14,6 +16,7 @@ import static lang.Lexer.TokenType.*;
 public class Parser {
 
   private final List<Token> tokens;
+  private final Set<String> procNames = new HashSet<>();
   private int pos = 0;
 
   public Parser(List<Token> tokens) {
@@ -22,34 +25,35 @@ public class Parser {
 
   // Entry point
   public AST.Program parse() {
+    
+    // Primera pasada: Registrar que nombres son procs
+    for(Token t : tokens) {
+      if (t.type == PROC) {
+        int idx = tokens.indexOf(t) + 1;
+        procNames.add(tokens.get(idx).value);
+      }
+    }
+
+    // Segunda pasada: parsear normal
     List<AST.Node> stmts = new ArrayList<>();
 
-    while (!check(EOF)) {
-      stmts.add(parseStatement());
-    }
+    while (!check(EOF)) stmts.add(parseStatement());
+    
     return new AST.Program(stmts);
   }
   // Statements
 
   private AST.Node parseStatement() {
-    if (check(VAR))
-      return parseVarDecl();
-    if (check(FUN))
-      return parseFunDecl();
-    if (check(PROC))
-      return parseProcDecl();
-    if (check(IF))
-      return parseIf();
-    if (check(WHILE))
-      return parseWhile();
-    if (check(FOR))
-      return parseFor();
-    if (check(RETURN))
-      return parseReturn();
-    if (check(PRINT))
-      return parsePrint();
-    if (check(LBRACE))
-      return parseBlock();
+    if (check(VAR))     return parseVarDecl();
+    if (check(FUN))     return parseFunDecl();
+    if (check(PROC))    return parseProcDecl();
+    if (check(IF))      return parseIf();
+    if (check(WHILE))   return parseWhile();
+    if (check(FOR))     return parseFor();
+    if (check(RETURN))  return parseReturn();
+    if (check(PRINT))   return parsePrint();
+    if (check(LBRACE))  return parseBlock();
+    
     return parseExprStatement();
   }
 
@@ -183,7 +187,19 @@ public class Parser {
       AST.Node value = parseExpression();
       return new AST.Assign(name, value);
     }
-    return parseOr();
+    return parseTernary();
+  }
+
+  private AST.Node parseTernary() {
+    AST.Node condition = parseOr();
+
+    if(!match(QUESTION)) return condition; // No es ternario, devolver normal
+    
+    AST.Node consequence = parseExpression(); // Rama verdadera
+    consume(COLON);                          // el : es obligatorio
+    AST.Node alternative = parseExpression(); // Rama falsa
+
+    return new AST.Ternary(condition, consequence, alternative);
   }
 
   private AST.Node parseOr() {
@@ -271,19 +287,30 @@ public class Parser {
       advance();
       return new AST.Literal(null);
     }
-    // Function call or variable
+    // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
+      
       if (match(LPAREN)) {
         List<AST.Node> args = new ArrayList<>();
+        
         if (!check(RPAREN)) {
           args.add(parseExpression());
           while (match(COMMA))
             args.add(parseExpression());
         }
+        
         consume(RPAREN);
-        return new AST.Call(name, args);
+
+        // Decidir el nodo correcto
+        if(procNames.contains(name)) {
+          return new AST.ProcCall(name, args);
+        } 
+         
+        return new AST.FunCall(name, args);
+        
       }
+      
       return new AST.Var(name);
     }
     // Grouped expression

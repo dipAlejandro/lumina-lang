@@ -23,12 +23,14 @@ public record Return(Node value) implements Node {}
 public record Print(Node value) implements Node {}
 public record Block(List<Node> statements) implements Node {}
 public record ExprStmt(Node expr) implements Node {}
-
+public record ArrowExpr(Node condExpr, ProcCall procCall) implements Node {};
 // Expressions
 
 public record Binary(Node left, String op, Node right) implements Node {}
 public record Unary(String op, Node operand) implements Node {}
-public record Call(String callee, List<Node> args) implements Node {}
+public record Ternary(Node condition, Node consequence, Node alternative) implements Node {}
+public record FunCall(String callee, List<Node> args) implements Node {}
+public record ProcCall(String callee, List<Node> args) implements Node {}
 public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
 

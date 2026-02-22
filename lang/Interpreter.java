@@ -16,11 +16,13 @@ public class Interpreter {
   }
 
   /** Representacion de una funcion definida por el usuario **/
-  record Function(AST.FunDecl decl, Environment closure) {
-  }
+  interface Callable{}
+  record Function(AST.FunDecl decl, Environment closure) implements Callable {}
+  record Procedure(AST.ProcDecl decl, Environment closure) implements Callable {}
 
   private final Environment global = new Environment();
   private final Map<String, Function> functions = new HashMap<>();
+  private final Map<String, Procedure> procedures = new HashMap<>();
 
   // Entry point
 
@@ -101,6 +103,11 @@ public class Interpreter {
         yield null;
       }
 
+      case AST.ProcDecl pd -> {
+       procedures.put(pd.name(),new Procedure(pd, env));
+       yield null; 
+      }
+
       default -> throw new RuntimeException("Nodo desconocido: " + node.getClass().getSimpleName());
     };
   }
@@ -165,15 +172,25 @@ public class Interpreter {
         };
       }
 
-      case AST.Call c -> {
-        Function fn = functions.get(c.callee());
+      case AST.Ternary t -> {
+        Object condition = evaluate(t.condition(), env);
+        if(isTruthy(condition)) {
+          yield evaluate(t.consequence(), env);
+        } else {
+          yield evaluate(t.alternative(), env);
+        }
+      }
+
+      case AST.FunCall fc -> {
+        
+        Function fn = functions.get(fc.callee());
         if (fn == null)
-          throw new RuntimeException("Función no definida: '" + c.callee() + "'");
+          throw new RuntimeException("Función no definida: '" + fc.callee() + "'");
 
         List<String> params = fn.decl().params();
-        List<AST.Node> args = c.args();
+        List<AST.Node> args = fc.args();
         if (params.size() != args.size())
-          throw new RuntimeException("'" + c.callee() + "' espera " + params.size() +
+          throw new RuntimeException("'" + fc.callee() + "' espera " + params.size() +
               " argumento(s), pero recibió " + args.size());
 
         Environment callEnv = new Environment(fn.closure());
@@ -188,6 +205,33 @@ public class Interpreter {
         }
       }
 
+      case AST.ProcCall pc -> {
+        Procedure pr = procedures.get(pc.callee());
+        if(pr == null) 
+          throw new RuntimeException("Procedimiento no definido: '"+ pc.callee() + "'");
+
+        List<String> params = pr.decl().params();
+        List<AST.Node> args = pc.args();
+
+        if (params.size() != args.size()) 
+          throw new RuntimeException("'" + pc.callee() + "' espera " + params.size() + " argumentos, pero recibió " + args.size());
+
+        Environment callEnv = new Environment(pr.closure());
+        for(int i = 0; i < params.size(); i++){
+          callEnv.define(params.get(i), evaluate(args.get(i), env));
+        }
+        
+        try{
+          executeBlock(pr.decl().body(), callEnv);
+      } catch (ReturnSignal rs) {
+        if (rs.value != null) {
+          throw new RuntimeException("Un procedimiento no puede retornar un valor");
+          // Nota: return; es valido, sirve para salir anticipadamente
+        }
+      }
+      yield null;
+    }
+    
       default -> execute(node, env);
     };
   }

@@ -1,18 +1,18 @@
-fun esMayor(edad) {
-	if(edad >= 18) {
-		print("Es mayor")
-	} else {
-		print("No es Mayor")
-	}
+fun add(x, y){
+	return x + y
 }
 
-fun inc() {
-	e = e + 1
+proc _greet(name) {
+	print("HELLO "+name)
 }
 
-for (var e = 1; e < 30; e++) {
-	print("Evaluado edad: "+e)
-	esMayor(e)
-}
+var x = 5
+x == 5 ? _greet("MARIO") : _greet("ALEJANDRO");
 
-print("END")
+var sum = x < 10 ? add(x, 1) : 0;
+
+//x < 10 ? sum = add(x, 1) : add(x, 2);
+print(sum)
+
+
+
