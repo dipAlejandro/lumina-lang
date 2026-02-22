@@ -15,15 +15,20 @@ public class Lexer {
     // Identifiers & keywords
     IDENTIFIER,
     VAR, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE,
-    // Operators
+    // Arithmetic operators
     PLUS, MINUS, STAR, SLASH, PERCENT,
+    PLUS_ASSIGN, MINUS_ASSIGN, STAR_ASSIGN, SLASH_ASSIGN,
+
+    // Logic operators
     EQ, NEQ, LT, LTE, GT, GTE,
     AND, OR, NOT,
     ASSIGN,
     QUESTION,
+
+    // Special
     ARROW,
     // Delimiters
-    LPAREN, RPAREN, LBRACE, RBRACE, COMMA,COLON, SEMICOLON,
+    LPAREN, RPAREN, LBRACE, RBRACE, COMMA, DOT, COLON, SEMICOLON,
     // Control
     EOF
   }
@@ -108,13 +113,27 @@ public class Lexer {
     private void readSymbol() {
         char c = source.charAt(pos++);
         switch (c) {
-            case '+' -> tokens.add(new Token(TokenType.PLUS,   "+", line));
+            case '+' -> { 
+              if(peek(0) == '=') { pos++; tokens.add(new Token(TokenType.PLUS_ASSIGN, "+=" , line)); }
+              tokens.add(new Token(TokenType.PLUS,   "+", line));
+              }
+              
             case '-' -> {
               if (peek(0) =='>') { pos++; tokens.add(new Token(TokenType.ARROW, "->", line)); }
+              else if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.MINUS_ASSIGN, "-=" , line )); }
               else tokens.add(new Token(TokenType.MINUS,  "-", line));
             }
-            case '*' -> tokens.add(new Token(TokenType.STAR,   "*", line));
-            case '/' -> tokens.add(new Token(TokenType.SLASH,  "/", line));
+            
+            case '*' -> { 
+              if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.STAR_ASSIGN, "*=", line)); }
+              else { tokens.add(new Token(TokenType.STAR, "*", line)); }
+            }
+            
+            case '/' -> { 
+              if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.SLASH_ASSIGN, "/=", line)); }
+              else { tokens.add(new Token(TokenType.SLASH,  "/", line)); }
+              }
+              
             case '%' -> tokens.add(new Token(TokenType.PERCENT,"%", line));
             case '(' -> tokens.add(new Token(TokenType.LPAREN, "(", line));
             case ')' -> tokens.add(new Token(TokenType.RPAREN, ")", line));

@@ -1,5 +1,6 @@
 package lang;
 
+import java.time.chrono.IsoChronology;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -207,6 +208,16 @@ public class Parser {
   }
 
   private AST.Node parseAssignment() {
+
+    // Check if it's an compound assigment: INDENTIFIER += expr
+    if (check(IDENTIFIER) && isCompoundAssign(peek(1).type)) {
+      String name = consume(IDENTIFIER).value;
+      String op = advance().value;
+      AST.Node value = parseExpression();
+
+      return new AST.CompoundAssign(name, op, value);
+    }
+    
     // Check if it's an assignment: IDENTIFIER = expr
     if (check(IDENTIFIER) && peek(1).type == ASSIGN) {
       String name = consume(IDENTIFIER).value;
@@ -391,5 +402,9 @@ public class Parser {
   private Token peek(int offset) {
     int idx = pos + offset;
     return idx < tokens.size() ? tokens.get(idx) : tokens.get(tokens.size() - 1);
+  }
+
+  private boolean isCompoundAssign(TokenType type) {
+    return type == PLUS_ASSIGN || type == MINUS_ASSIGN || type == STAR_ASSIGN || type == SLASH_ASSIGN;
   }
 }

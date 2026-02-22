@@ -194,6 +194,25 @@ public class Interpreter {
         };
       }
 
+      case AST.CompoundAssign ca -> {
+        double current = toNumber(env.get(ca.name()));
+        double operand = toNumber(evaluate(ca.value(), env));
+        double result = switch (ca.op()) {
+          case "+=" -> current + operand;
+          case "-=" -> current - operand;
+          case "*=" -> current * operand;
+          case "/=" -> {
+            if (operand == 0) throw new ArithmeticException("División por cero");
+            yield current / operand;
+          }
+          default -> throw new RuntimeException("Operador compuesto desconocido: " + ca.op());
+        };
+
+        env.set(ca.name(), result);
+
+        yield result;
+      }
+
       case AST.Ternary t -> {
         Object condition = evaluate(t.condition(), env);
         if(isTruthy(condition)) {

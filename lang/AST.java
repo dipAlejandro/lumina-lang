@@ -8,12 +8,13 @@ import java.util.List;
 public class AST {
 
 public interface Node {}
-
+public interface Incrementable extends Node {}
 // Statements
 
 public record Program(List<Node> statements) implements Node{}
 public record VarDecl(String name, Node initializer) implements Node {}
 public record Assign(String name, Node value) implements Node{}
+public record CompoundAssign(String name, String op, Node value) implements Node {}
 public record If(Node condition, Block thenBranch, Block elseBranch) implements Node {}
 public record IfArrow(Node condition, Node body) implements Node {}
 public record While(Node condition, Block body) implements Node {}
