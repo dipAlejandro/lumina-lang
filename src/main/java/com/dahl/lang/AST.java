@@ -8,7 +8,6 @@ import java.util.List;
 public class AST {
 
 public interface Node {}
-public interface Incrementable extends Node {}
 // Statements
 
 public record Program(List<Node> statements) implements Node{}
@@ -26,6 +25,10 @@ public record FunDecl(String name, List<String> params, Block body) implements N
 public record Return(Node value) implements Node {}
 public record Print(Node value) implements Node {}
 public record Block(List<Node> statements) implements Node {}
+public record Import(String namespace,String path) implements Node {}
+public record ExportFun(FunDecl decl) implements Node {}
+public record ExportProc(ProcDecl decl) implements Node {}
+public record ExportVar(VarDecl decl) implements Node {}
 public record ExprStmt(Node expr) implements Node {}
 public record ArrowExpr(Node condExpr, ProcCall procCall) implements Node {};
 
@@ -36,7 +39,8 @@ public record Unary(String op, Node operand) implements Node {}
 public record Ternary(Node condition, Node consequence, Node alternative) implements Node {}
 public record FunCall(String callee, List<Node> args) implements Node {}
 public record ProcCall(String callee, List<Node> args) implements Node {}
-public record Var(String name) implements Node {}
+public record NamespaceCall(String namespace, String member, List<Node> args) implements Node {}
+public record NamespaceVar(String namespace, String member) implements Node {}public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
 public record Increment (String name, String op, boolean prefix) implements Node {}
 }

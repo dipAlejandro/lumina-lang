@@ -1,0 +1,87 @@
+// std/math
+
+import exception from "std/exception";
+
+export fun abs(x) { return x < 0 ? -x : x; }
+
+export fun is_integer(x) {
+        var integer = truncate(x);
+        if(x == integer) { return true; }
+        else { return false; }
+    }
+
+export fun truncate(x) {
+        if (x >= 0){ return floor(x); }
+        else { return floor(-x); }
+    }
+
+export fun floor(x) {
+    if (x < 0) {
+        var i = 0;
+        while (i >= x) -> i -= 1;
+        return i;
+    }
+    var i = 0;
+    while (i <= x) -> i += 1;
+    return i - 1;
+}
+
+export fun exp(x) {
+        var result = 1;
+        var term = 1;
+        var prec = 0.0000001;
+        var  i = 1;
+
+        while(abs(term) > prec) {
+            term *= x / i;
+            result += term;
+            i++;
+    }
+        return result;
+}
+
+export fun log(x) {
+        if(x <= 0) -> exception._error("Logaritmo natural indefinido para X <= 0");
+
+        var u = (x - 1) / (x + 1);
+        var res = 0;
+        var term = u;
+        var prec = 0.0000001;
+        var i = 1;
+
+        while(abs(term) > prec) {
+            res += term / i;
+            i += 2;
+            term *= u * u
+        }
+        return 2 * res;
+}
+
+export fun pow(base, exp) {
+        if(base == 0 && exp == 0) -> exception. _error("Forma indeterminada 0^0");
+
+        var res = 0;
+        if (base == 0) { return 0; }
+        if (exp == 0) { return 1; }
+        
+        // Exp. negativo
+        if (exp < 0) {
+            return 1 / pow(base, -exp);
+        }
+        
+        if(is_integer(exp)) {
+
+            if (exp % 2 == 0) {
+                var part = pow(base, exp / 2);
+                return part * part;
+            } else {
+                return base * pow(base, exp - 1);
+            }
+           } else {
+
+               if(base < 0) -> exception._error("Resultado complejo, no soportado");
+
+               return exp(exp * log(base));
+             }
+
+    }

@@ -14,7 +14,7 @@ public class Lexer {
     NUMBER, STRING, BOOLEAN, NULL,
     // Identifiers & keywords
     IDENTIFIER,
-    VAR, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE,
+    VAR, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM,
     // Arithmetic operators
     PLUS, MINUS, STAR, SLASH, PERCENT,
     PLUS_ASSIGN, MINUS_ASSIGN, STAR_ASSIGN, SLASH_ASSIGN,
@@ -109,6 +109,9 @@ public class Lexer {
             case "true"   -> TokenType.TRUE;
             case "false"  -> TokenType.FALSE;
             case "null"   -> TokenType.NULL;
+            case "import" -> TokenType.IMPORT;
+            case "export" -> TokenType.EXPORT;
+            case "from" -> TokenType.FROM;
             default       -> TokenType.IDENTIFIER;
         };
         tokens.add(new Token(type, word, line));
@@ -149,6 +152,7 @@ public class Lexer {
             case ';' -> tokens.add(new Token(TokenType.SEMICOLON, ";", line));
             case '?' -> tokens.add(new Token(TokenType.QUESTION,"?", line ));
             case ':' -> tokens.add(new Token(TokenType.COLON, ":", line));
+            case '.' -> tokens.add(new Token(TokenType.DOT, ".", line ));
             case '=' -> {
                 if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.EQ, "==", line)); }
                 else tokens.add(new Token(TokenType.ASSIGN, "=", line));

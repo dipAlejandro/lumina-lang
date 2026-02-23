@@ -1,8 +1,15 @@
 package com.dahl.lang;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.dahl.lang.AST;
+import com.dahl.lang.Environment;
 
 public class Interpreter {
   static class ReturnSignal extends RuntimeException {
@@ -16,13 +23,23 @@ public class Interpreter {
   }
 
   /** Representacion de una funcion definida por el usuario **/
-  interface Callable{}
-  record Function(AST.FunDecl decl, Environment closure) implements Callable {}
-  record Procedure(AST.ProcDecl decl, Environment closure) implements Callable {}
+  interface Callable {
+  }
+
+  record Function(AST.FunDecl decl, Environment closure) implements Callable {
+  }
+
+  record Procedure(AST.ProcDecl decl, Environment closure) implements Callable {
+  }
+
+  record Module(Environment env, Map<String, Callable> callables) {
+  }
 
   private final Environment global = new Environment();
   private final Map<String, Function> functions = new HashMap<>();
   private final Map<String, Procedure> procedures = new HashMap<>();
+  private final Map<String, Module> modules = new HashMap<>();
+  private Module currentModule = null; // null = scope global
 
   // Entry point
 
@@ -43,6 +60,38 @@ public class Interpreter {
   // Execution
   private Object execute(AST.Node node, Environment env) {
     return switch (node) {
+
+      case AST.Import i -> {
+        String src = "";
+        AST.Program program;
+        try {
+          src = Files.readString(Path.of(i.path() + ".ptl"));
+          program = new Parser(new Lexer(src).tokenize()).parse();
+        } catch (IOException e) {
+          throw new RuntimeException("Modulo '" + src + "' no encontrado.");
+        }
+
+        // Ejecutar en modulo en su propio entorno aislado
+        Module mod = loadModule(program);
+        modules.put(i.namespace(), mod);
+        yield null;
+      }
+
+      case AST.ExportFun ef -> {
+        functions.put(ef.decl().name(), new Function(ef.decl(), env));
+        yield null;
+      }
+
+      case AST.ExportProc ep -> {
+        procedures.put(ep.decl().name(), new Procedure(ep.decl(), env));
+        yield null;
+      }
+
+      case AST.ExportVar ev -> {
+        execute(ev.decl(), env);
+        yield null;
+      }
+
       case AST.VarDecl v -> {
         Object val = v.initializer() != null ? evaluate(v.initializer(), env) : null;
         env.define(v.name(), val);
@@ -64,7 +113,8 @@ public class Interpreter {
       }
 
       case AST.IfArrow ia -> {
-        if(isTruthy(evaluate(ia.condition(), env))) evaluate(ia.body(), env);
+        if (isTruthy(evaluate(ia.condition(), env)))
+          evaluate(ia.body(), env);
 
         yield null;
       }
@@ -77,7 +127,8 @@ public class Interpreter {
       }
 
       case AST.WhileArrow wa -> {
-        while (isTruthy(evaluate(wa.condition(), env))) evaluate(wa.body(), env);
+        while (isTruthy(evaluate(wa.condition(), env)))
+          evaluate(wa.body(), env);
 
         yield null;
       }
@@ -126,8 +177,8 @@ public class Interpreter {
       }
 
       case AST.ProcDecl pd -> {
-       procedures.put(pd.name(),new Procedure(pd, env));
-       yield null; 
+        procedures.put(pd.name(), new Procedure(pd, env));
+        yield null;
       }
 
       default -> throw new RuntimeException("Nodo desconocido: " + node.getClass().getSimpleName());
@@ -170,18 +221,25 @@ public class Interpreter {
         yield switch (b.op()) {
           case "+" -> {
             if (left instanceof String || right instanceof String)
+
               yield stringify(left) + stringify(right);
+
             yield toNumber(left) + toNumber(right);
           }
-          case "-" -> toNumber(left) - toNumber(right);
+          case "-" ->
+
+            toNumber(left) - toNumber(right);
           case "*" -> toNumber(left) * toNumber(right);
           case "/" -> {
             double r = toNumber(right);
             if (r == 0)
               throw new ArithmeticException("División por cero");
+
             yield toNumber(left) / r;
           }
-          case "%" -> toNumber(left) % toNumber(right);
+          case "%" ->
+
+            toNumber(left) % toNumber(right);
           case "==" -> isEqual(left, right);
           case "!=" -> !isEqual(left, right);
           case "<" -> toNumber(left) < toNumber(right);
@@ -194,7 +252,9 @@ public class Interpreter {
         };
       }
 
-      case AST.CompoundAssign ca -> {
+      case
+
+          AST.CompoundAssign ca -> {
         double current = toNumber(env.get(ca.name()));
         double operand = toNumber(evaluate(ca.value(), env));
         double result = switch (ca.op()) {
@@ -202,7 +262,8 @@ public class Interpreter {
           case "-=" -> current - operand;
           case "*=" -> current * operand;
           case "/=" -> {
-            if (operand == 0) throw new ArithmeticException("División por cero");
+            if (operand == 0)
+              throw new ArithmeticException("División por cero");
             yield current / operand;
           }
           default -> throw new RuntimeException("Operador compuesto desconocido: " + ca.op());
@@ -213,26 +274,34 @@ public class Interpreter {
         yield result;
       }
 
-      case AST.Increment inc -> {
-        double current  = toNumber(env.get(inc.name()));
+      case
+          AST.Increment inc -> {
+        double current = toNumber(env.get(inc.name()));
         double next = inc.op().equals("++") ? current + 1 : current - 1;
         env.set(inc.name(), next);
 
         yield inc.prefix() ? next : current;
       }
 
-      case AST.Ternary t -> {
+      case
+          AST.Ternary t -> {
         Object condition = evaluate(t.condition(), env);
-        if(isTruthy(condition)) {
+        if (isTruthy(condition)) {
+
           yield evaluate(t.consequence(), env);
-        } else {
+        } else
+
+        {
+
           yield evaluate(t.alternative(), env);
         }
       }
 
-      case AST.FunCall fc -> {
-        
-        Function fn = functions.get(fc.callee());
+      case
+
+          AST.FunCall fc -> {
+
+        Function fn = resolveFunction(fc.callee());
         if (fn == null)
           throw new RuntimeException("Función no definida: '" + fc.callee() + "'");
 
@@ -254,35 +323,100 @@ public class Interpreter {
         }
       }
 
-      case AST.ProcCall pc -> {
-        Procedure pr = procedures.get(pc.callee());
-        if(pr == null) 
-          throw new RuntimeException("Procedimiento no definido: '"+ pc.callee() + "'");
+      case
+          AST.ProcCall pc -> {
+        Procedure pr = resolveProcedure(pc.callee());
+        if (pr == null)
+          throw new RuntimeException("Procedimiento no definido: '" + pc.callee() + "'");
 
         List<String> params = pr.decl().params();
         List<AST.Node> args = pc.args();
 
-        if (params.size() != args.size()) 
-          throw new RuntimeException("'" + pc.callee() + "' espera " + params.size() + " argumentos, pero recibió " + args.size());
+        if (params.size() != args.size())
+          throw new RuntimeException(
+              "'" + pc.callee() + "' espera " + params.size() + " argumentos, pero recibió " + args.size());
 
         Environment callEnv = new Environment(pr.closure());
-        for(int i = 0; i < params.size(); i++){
+        for (int i = 0; i < params.size(); i++) {
           callEnv.define(params.get(i), evaluate(args.get(i), env));
         }
-        
-        try{
+
+        try {
           executeBlock(pr.decl().body(), callEnv);
-      } catch (ReturnSignal rs) {
-        if (rs.value != null) {
-          throw new RuntimeException("Un procedimiento no puede retornar un valor");
-          // Nota: return; es valido, sirve para salir anticipadamente
+        } catch (ReturnSignal rs) {
+          if (rs.value != null) {
+            throw new RuntimeException("Un procedimiento no puede retornar un valor");
+            // Nota: return; es valido, sirve para salir anticipadamente
+          }
+        }
+        yield null;
+      }
+
+      case AST.NamespaceCall nc -> {
+        Module mod = modules.get(nc.namespace());
+        if (mod == null)
+          throw new RuntimeException("Módulo no encontrado: '" + nc.namespace() + "'");
+
+        Callable callable = mod.callables().get(nc.member());
+        if (callable == null)
+          throw new RuntimeException("'" + nc.member() + "' no existe en módulo '" + nc.namespace() + "'");
+
+        List<Object> evaluatedArgs = new ArrayList<>();
+        for (AST.Node arg : nc.args())
+          evaluatedArgs.add(evaluate(arg, env));
+
+        Module previous = currentModule;
+        currentModule = mod; // ← setear contexto del módulo
+
+        try {
+          if (callable instanceof Function fn) {
+            List<String> params = fn.decl().params();
+            if (params.size() != evaluatedArgs.size())
+              throw new RuntimeException("'" + nc.member() + "' espera " + params.size() + " argumento(s)");
+
+            Environment callEnv = new Environment(fn.closure());
+            for (int i = 0; i < params.size(); i++)
+              callEnv.define(params.get(i), evaluatedArgs.get(i));
+
+            try {
+              executeBlock(fn.decl().body(), callEnv);
+              yield null;
+            } catch (ReturnSignal rs) {
+              yield rs.value;
+            }
+
+          } else if (callable instanceof Procedure pr) {
+            List<String> params = pr.decl().params();
+            if (params.size() != evaluatedArgs.size())
+              throw new RuntimeException("'" + nc.member() + "' espera " + params.size() + " argumento(s)");
+
+            Environment callEnv = new Environment(pr.closure());
+            for (int i = 0; i < params.size(); i++)
+              callEnv.define(params.get(i), evaluatedArgs.get(i));
+
+            try {
+              executeBlock(pr.decl().body(), callEnv);
+            } catch (ReturnSignal rs) {
+              if (rs.value != null)
+                throw new RuntimeException("Un procedimiento no puede retornar un valor");
+            }
+            yield null;
+          }
+          throw new RuntimeException("Callable desconocido en módulo '" + nc.namespace() + "'");
+        } finally {
+          currentModule = previous; // ← siempre restaurar, incluso si hay excepción
         }
       }
-      yield null;
-    }
-    
+      case AST.NamespaceVar nv -> {
+        Module mod = modules.get(nv.namespace());
+        if (mod == null)
+          throw new RuntimeException("Módulo no encontrado: '" + nv.namespace() + "'");
+        yield mod.env().get(nv.member());
+      }
+
       default -> execute(node, env);
     };
+
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -330,5 +464,68 @@ public class Interpreter {
       return d.toString();
     }
     return value.toString();
+  }
+
+  private Module loadModule(AST.Program program) {
+    Environment modEnv = new Environment();
+    Map<String, Callable> modCallables = new HashMap<>();
+
+    for (AST.Node stmt : program.statements()) {
+      if (stmt instanceof AST.ExportFun ef) {
+        modCallables.put(ef.decl().name(), new Function(ef.decl(), modEnv));
+      } else if (stmt instanceof AST.FunDecl fd) {
+        modCallables.put(fd.name(), new Function(fd, modEnv));
+      } else if (stmt instanceof AST.ExportProc ep) {
+        modCallables.put(ep.decl().name(), new Procedure(ep.decl(), modEnv));
+      } else if (stmt instanceof AST.ProcDecl pc) {
+        modCallables.put(pc.name(), new Procedure(pc, modEnv));
+      } else if (stmt instanceof AST.ExportVar ev) {
+        execute(ev.decl(), modEnv);
+      } // Lo que no tiene 'export' se ejecuta pero no se expone
+      else {
+        execute(stmt, modEnv);
+      }
+    }
+
+    Module mod = new Module(modEnv, modCallables);
+
+    // Segunda pasada: ejecutar el resto con el módulo como contexto
+    Module previous = currentModule;
+    currentModule = mod;
+    for (AST.Node stmt : program.statements()) {
+      if (stmt instanceof AST.ExportFun || stmt instanceof AST.FunDecl ||
+          stmt instanceof AST.ExportProc || stmt instanceof AST.ProcDecl)
+        continue;
+      execute(stmt, modEnv);
+    }
+    currentModule = previous; // restaurar contexto anterior
+
+    return mod;
+  }
+
+  private Function resolveFunction(String name) {
+    // Buscar primero en el módulo activo
+    if (currentModule != null) {
+      Callable c = currentModule.callables().get(name);
+      if (c instanceof Function f)
+        return f;
+    }
+    // Luego en el scope global
+    Function fn = functions.get(name);
+    if (fn == null)
+      throw new RuntimeException("Función no definida: '" + name + "'");
+    return fn;
+  }
+
+  private Procedure resolveProcedure(String name) {
+    if (currentModule != null) {
+      Callable c = currentModule.callables().get(name);
+      if (c instanceof Procedure p)
+        return p;
+    }
+    Procedure pr = procedures.get(name);
+    if (pr == null)
+      throw new RuntimeException("Procedimiento no definido: '" + name + "'");
+    return pr;
   }
 }

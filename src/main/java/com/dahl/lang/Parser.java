@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.dahl.lang.AST;
 import com.dahl.lang.Lexer.Token;
 
 /**
@@ -25,9 +26,9 @@ public class Parser {
 
   // Entry point
   public AST.Program parse() {
-    
+
     // Primera pasada: Registrar que nombres son procs
-    for(Token t : tokens) {
+    for (Token t : tokens) {
       if (t.type == PROC) {
         int idx = tokens.indexOf(t) + 1;
         procNames.add(tokens.get(idx).value);
@@ -37,23 +38,36 @@ public class Parser {
     // Segunda pasada: parsear normal
     List<AST.Node> stmts = new ArrayList<>();
 
-    while (!check(EOF)) stmts.add(parseStatement());
-    
+    while (!check(EOF))
+      stmts.add(parseStatement());
+
     return new AST.Program(stmts);
   }
   // Statements
 
   private AST.Node parseStatement() {
-    if (check(VAR))     return parseVarDecl(false);
-    if (check(FUN))     return parseFunDecl();
-    if (check(PROC))    return parseProcDecl();
-    if (check(IF))      return parseIf();
-    if (check(WHILE))   return parseWhile();
-    if (check(FOR))     return parseFor();
-    if (check(RETURN))  return parseReturn();
-    if (check(PRINT))   return parsePrint();
-    if (check(LBRACE))  return parseBlock();
-    
+    if (check(VAR))
+      return parseVarDecl(false);
+    if (check(FUN))
+      return parseFunDecl();
+    if (check(PROC))
+      return parseProcDecl();
+    if (check(IF))
+      return parseIf();
+    if (check(WHILE))
+      return parseWhile();
+    if (check(FOR))
+      return parseFor();
+    if (check(RETURN))
+      return parseReturn();
+    if (check(PRINT))
+      return parsePrint();
+    if (check(LBRACE))
+      return parseBlock();
+    if (check(IMPORT))
+      return parseImport();
+    if (check(EXPORT))
+      return parseExport();
     return parseExprStatement();
   }
 
@@ -65,9 +79,11 @@ public class Parser {
     if (match(ASSIGN))
       init = parseExpression();
 
-    if (requiredSemicolon) consume(SEMICOLON);
-    else matchOptional(SEMICOLON);
-    
+    if (requiredSemicolon)
+      consume(SEMICOLON);
+    else
+      matchOptional(SEMICOLON);
+
     return new AST.VarDecl(name, init);
   }
 
@@ -118,7 +134,7 @@ public class Parser {
       return new AST.IfArrow(condition, body);
     }
 
-    // If con bloque    
+    // If con bloque
     AST.Block thenBranch = parseBlock();
     AST.Block elseBranch = null;
     if (match(ELSE)) {
@@ -152,13 +168,13 @@ public class Parser {
     AST.Node condition = parseExpression();
     consume(SEMICOLON);
     // step: expr
-    //String stepName = consume(IDENTIFIER).value;
-    //consume(ASSIGN);
-    //AST.Node stepVal = parseExpression();
+    // String stepName = consume(IDENTIFIER).value;
+    // consume(ASSIGN);
+    // AST.Node stepVal = parseExpression();
     AST.Node step = parseExpression();
     System.out.println("Step nodo: " + step);
-System.out.println("Token actual: " + current());
-System.out.println("Token siguiente: " + peek(1));
+    // System.out.println("Token actual: " + current());
+    // System.out.println("Token siguiente: " + peek(1));
     consume(RPAREN);
 
     // For arrow
@@ -205,6 +221,30 @@ System.out.println("Token siguiente: " + peek(1));
     return new AST.ExprStmt(expr);
   }
 
+  // Sintaxis import math from "std/math";
+  private AST.Import parseImport() {
+    consume(IMPORT);
+    String namespace = consume(IDENTIFIER).value;
+    consume(FROM);
+    String path = consume(STRING).value;
+    consume(SEMICOLON);
+
+    return new AST.Import(namespace, path);
+
+  }
+
+  // export fun/proc/var
+  private AST.Node parseExport() {
+    consume(EXPORT);
+    if (check(FUN))
+      return new AST.ExportFun((AST.FunDecl) parseFunDecl());
+    if (check(PROC))
+      return new AST.ExportProc((AST.ProcDecl) parseProcDecl());
+    if (check(VAR))
+      return new AST.ExportVar(parseVarDecl(true));
+    throw new RuntimeException("Se esperaba fun, proc o var después de export en línea " + current().line);
+  }
+
   // ── Expressions (precedence climbing) ────────────────────────────────────
 
   private AST.Node parseExpression() {
@@ -215,34 +255,36 @@ System.out.println("Token siguiente: " + peek(1));
 
     // Asignación compuesta: i += 1
     if (check(IDENTIFIER) && isCompoundAssign(peek(1).type)) {
-        String name = consume(IDENTIFIER).value;
-        String op = advance().value;
-        return new AST.CompoundAssign(name, op, parseExpression());
+      String name = consume(IDENTIFIER).value;
+      String op = advance().value;
+      return new AST.CompoundAssign(name, op, parseExpression());
     }
 
     // Asignación simple: i = expr
     if (check(IDENTIFIER) && peek(1).type == ASSIGN) {
-        String name = consume(IDENTIFIER).value;
-        consume(ASSIGN);
-        return new AST.Assign(name, parseExpression());
+      String name = consume(IDENTIFIER).value;
+      consume(ASSIGN);
+      return new AST.Assign(name, parseExpression());
     }
 
-    // Sufijo: i++ / i--  ← agregar esto
+    // Sufijo: i++ / i-- ← agregar esto
     if (check(IDENTIFIER) && isSuffixIncrement(peek(1).type)) {
-        String name = consume(IDENTIFIER).value;
-        String op = advance().value;
-        return new AST.Increment(name, op, false);
+      String name = consume(IDENTIFIER).value;
+      String op = advance().value;
+      return new AST.Increment(name, op, false);
     }
 
     return parseTernary();
-}
+  }
+
   private AST.Node parseTernary() {
     AST.Node condition = parseOr();
 
-    if(!match(QUESTION)) return condition; // No es ternario, devolver normal
-    
+    if (!match(QUESTION))
+      return condition; // No es ternario, devolver normal
+
     AST.Node consequence = parseExpression(); // Rama verdadera
-    consume(COLON);                          // el : es obligatorio
+    consume(COLON); // el : es obligatorio
     AST.Node alternative = parseExpression(); // Rama falsa
 
     return new AST.Ternary(condition, consequence, alternative);
@@ -308,12 +350,12 @@ System.out.println("Token siguiente: " + peek(1));
       return new AST.Unary(op, parseUnary());
     }
 
-    if(check(PLUS_PLUS) || check(MINUS_MINUS)) {
+    if (check(PLUS_PLUS) || check(MINUS_MINUS)) {
       String op = advance().value;
       String name = consume(IDENTIFIER).value;
       return new AST.Increment(name, op, true);
     }
-    
+
     return parsePrimary();
   }
 
@@ -343,27 +385,42 @@ System.out.println("Token siguiente: " + peek(1));
     // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
-    
+
+      if (match(DOT)) { // match consume el DOT
+        String member = consume(IDENTIFIER).value;
+        if (match(LPAREN)) {
+          List<AST.Node> args = new ArrayList<>();
+          if (!check(RPAREN)) {
+            args.add(parseExpression());
+            while (match(COMMA))
+              args.add(parseExpression());
+          }
+          consume(RPAREN);
+          return new AST.NamespaceCall(name, member, args);
+        }
+        return new AST.NamespaceVar(name, member);
+      }
+
       if (match(LPAREN)) {
         List<AST.Node> args = new ArrayList<>();
-        
+
         if (!check(RPAREN)) {
           args.add(parseExpression());
           while (match(COMMA))
             args.add(parseExpression());
         }
-        
+
         consume(RPAREN);
 
         // Decidir el nodo correcto
-        if(procNames.contains(name)) {
+        if (procNames.contains(name)) {
           return new AST.ProcCall(name, args);
-        } 
-         
+        }
+
         return new AST.FunCall(name, args);
-        
+
       }
-      
+
       return new AST.Var(name);
     }
     // Grouped expression
