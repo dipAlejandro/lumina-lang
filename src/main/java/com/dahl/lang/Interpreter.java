@@ -10,6 +10,7 @@ import java.util.Map;
 
 import com.dahl.lang.AST;
 import com.dahl.lang.Environment;
+import com.dahl.lang.NativeFunction;
 
 public class Interpreter {
   static class ReturnSignal extends RuntimeException {
@@ -300,6 +301,14 @@ public class Interpreter {
       case
 
           AST.FunCall fc -> {
+
+        if (NativeFunction.isNative(fc.callee())) {
+          List<Object> evaluatedArgs = new ArrayList<>();
+          for (AST.Node arg : fc.args())
+            evaluatedArgs.add(evaluate(arg, env));
+
+          yield NativeFunction.call(fc.callee(), evaluatedArgs);
+        }
 
         Function fn = resolveFunction(fc.callee());
         if (fn == null)
