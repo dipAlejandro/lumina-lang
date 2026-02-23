@@ -1,4 +1,4 @@
-package lang;
+package com.dahl.lang;
 
 import java.util.List;
 
@@ -19,8 +19,8 @@ public record If(Node condition, Block thenBranch, Block elseBranch) implements 
 public record IfArrow(Node condition, Node body) implements Node {}
 public record While(Node condition, Block body) implements Node {}
 public record WhileArrow(Node condition, Node body) implements Node {}
-public record For(VarDecl init, Node condition, Assign step, Block body) implements Node {}
-public record ForArrow(VarDecl init, Node condition, Assign step, Node body) implements Node {}
+public record For(VarDecl init, Node condition, Node step, Block body) implements Node {}
+public record ForArrow(VarDecl init, Node condition, Node step, Node body) implements Node {}
 public record ProcDecl(String name, List<String> params, Block body) implements Node {}
 public record FunDecl(String name, List<String> params, Block body) implements Node {}
 public record Return(Node value) implements Node {}
@@ -38,5 +38,5 @@ public record FunCall(String callee, List<Node> args) implements Node {}
 public record ProcCall(String callee, List<Node> args) implements Node {}
 public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
-
+public record Increment (String name, String op, boolean prefix) implements Node {}
 }

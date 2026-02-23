@@ -1,4 +1,4 @@
-package lang;
+package com.dahl.lang;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

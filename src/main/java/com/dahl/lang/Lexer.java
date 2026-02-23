@@ -1,4 +1,4 @@
-package lang;
+package com.dahl.lang;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +25,8 @@ public class Lexer {
     ASSIGN,
     QUESTION,
 
+    // Binary operators
+    PLUS_PLUS, MINUS_MINUS,
     // Special
     ARROW,
     // Delimiters
@@ -60,6 +62,7 @@ public class Lexer {
   }
 
   public List<Token> tokenize(){
+        
     while(pos < source.length()) {
       skipWhiteSpaceAndComments();
 
@@ -73,6 +76,7 @@ public class Lexer {
       else readSymbol();
     }
     tokens.add(new Token(TokenType.EOF,"" ,line));
+  
     return tokens;
   }
 
@@ -114,12 +118,14 @@ public class Lexer {
         char c = source.charAt(pos++);
         switch (c) {
             case '+' -> { 
-              if(peek(0) == '=') { pos++; tokens.add(new Token(TokenType.PLUS_ASSIGN, "+=" , line)); }
-              tokens.add(new Token(TokenType.PLUS,   "+", line));
+              if (peek(0) == '+') { pos++; tokens.add(new Token(TokenType.PLUS_PLUS, "++", line)); }
+              else if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.PLUS_ASSIGN, "+=" , line)); }
+              else tokens.add(new Token(TokenType.PLUS,   "+", line));
               }
               
             case '-' -> {
               if (peek(0) =='>') { pos++; tokens.add(new Token(TokenType.ARROW, "->", line)); }
+              else if (peek(0) == '-') { pos++; tokens.add(new Token(TokenType.MINUS_MINUS, "--", line)); }              
               else if (peek(0) == '=') { pos++; tokens.add(new Token(TokenType.MINUS_ASSIGN, "-=" , line )); }
               else tokens.add(new Token(TokenType.MINUS,  "-", line));
             }

@@ -1,4 +1,4 @@
-package lang;
+package com.dahl.lang;
 
 import java.util.HashMap;
 import java.util.List;
@@ -211,6 +211,14 @@ public class Interpreter {
         env.set(ca.name(), result);
 
         yield result;
+      }
+
+      case AST.Increment inc -> {
+        double current  = toNumber(env.get(inc.name()));
+        double next = inc.op().equals("++") ? current + 1 : current - 1;
+        env.set(inc.name(), next);
+
+        yield inc.prefix() ? next : current;
       }
 
       case AST.Ternary t -> {

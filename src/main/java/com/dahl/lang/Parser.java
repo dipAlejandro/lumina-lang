@@ -1,15 +1,14 @@
-package lang;
+package com.dahl.lang;
 
-import java.time.chrono.IsoChronology;
+import com.dahl.lang.Lexer.TokenType;
+import static com.dahl.lang.Lexer.TokenType.*;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import lang.Lexer.Token;
-import lang.Lexer.TokenType;
-
-import static lang.Lexer.TokenType.*;
+import com.dahl.lang.Lexer.Token;
 
 /**
  * Parser
@@ -45,7 +44,7 @@ public class Parser {
   // Statements
 
   private AST.Node parseStatement() {
-    if (check(VAR))     return parseVarDecl();
+    if (check(VAR))     return parseVarDecl(false);
     if (check(FUN))     return parseFunDecl();
     if (check(PROC))    return parseProcDecl();
     if (check(IF))      return parseIf();
@@ -58,7 +57,7 @@ public class Parser {
     return parseExprStatement();
   }
 
-  private AST.VarDecl parseVarDecl() {
+  private AST.VarDecl parseVarDecl(boolean requiredSemicolon) {
     consume(VAR);
     String name = consume(IDENTIFIER).value;
 
@@ -66,7 +65,9 @@ public class Parser {
     if (match(ASSIGN))
       init = parseExpression();
 
-    matchOptional(SEMICOLON);
+    if (requiredSemicolon) consume(SEMICOLON);
+    else matchOptional(SEMICOLON);
+    
     return new AST.VarDecl(name, init);
   }
 
@@ -147,14 +148,17 @@ public class Parser {
   private AST.Node parseFor() {
     consume(FOR);
     consume(LPAREN);
-    AST.VarDecl init = parseVarDecl();
+    AST.VarDecl init = parseVarDecl(true);
     AST.Node condition = parseExpression();
     consume(SEMICOLON);
-    // step: identifier = expr
-    String stepName = consume(IDENTIFIER).value;
-    consume(ASSIGN);
-    AST.Node stepVal = parseExpression();
-    AST.Assign step = new AST.Assign(stepName, stepVal);
+    // step: expr
+    //String stepName = consume(IDENTIFIER).value;
+    //consume(ASSIGN);
+    //AST.Node stepVal = parseExpression();
+    AST.Node step = parseExpression();
+    System.out.println("Step nodo: " + step);
+System.out.println("Token actual: " + current());
+System.out.println("Token siguiente: " + peek(1));
     consume(RPAREN);
 
     // For arrow
@@ -209,25 +213,29 @@ public class Parser {
 
   private AST.Node parseAssignment() {
 
-    // Check if it's an compound assigment: INDENTIFIER += expr
+    // Asignación compuesta: i += 1
     if (check(IDENTIFIER) && isCompoundAssign(peek(1).type)) {
-      String name = consume(IDENTIFIER).value;
-      String op = advance().value;
-      AST.Node value = parseExpression();
-
-      return new AST.CompoundAssign(name, op, value);
+        String name = consume(IDENTIFIER).value;
+        String op = advance().value;
+        return new AST.CompoundAssign(name, op, parseExpression());
     }
-    
-    // Check if it's an assignment: IDENTIFIER = expr
+
+    // Asignación simple: i = expr
     if (check(IDENTIFIER) && peek(1).type == ASSIGN) {
-      String name = consume(IDENTIFIER).value;
-      consume(ASSIGN);
-      AST.Node value = parseExpression();
-      return new AST.Assign(name, value);
+        String name = consume(IDENTIFIER).value;
+        consume(ASSIGN);
+        return new AST.Assign(name, parseExpression());
     }
-    return parseTernary();
-  }
 
+    // Sufijo: i++ / i--  ← agregar esto
+    if (check(IDENTIFIER) && isSuffixIncrement(peek(1).type)) {
+        String name = consume(IDENTIFIER).value;
+        String op = advance().value;
+        return new AST.Increment(name, op, false);
+    }
+
+    return parseTernary();
+}
   private AST.Node parseTernary() {
     AST.Node condition = parseOr();
 
@@ -299,6 +307,13 @@ public class Parser {
       String op = advance().value;
       return new AST.Unary(op, parseUnary());
     }
+
+    if(check(PLUS_PLUS) || check(MINUS_MINUS)) {
+      String op = advance().value;
+      String name = consume(IDENTIFIER).value;
+      return new AST.Increment(name, op, true);
+    }
+    
     return parsePrimary();
   }
 
@@ -328,7 +343,7 @@ public class Parser {
     // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
-      
+    
       if (match(LPAREN)) {
         List<AST.Node> args = new ArrayList<>();
         
@@ -406,5 +421,9 @@ public class Parser {
 
   private boolean isCompoundAssign(TokenType type) {
     return type == PLUS_ASSIGN || type == MINUS_ASSIGN || type == STAR_ASSIGN || type == SLASH_ASSIGN;
+  }
+
+  private boolean isSuffixIncrement(TokenType type) {
+    return type == PLUS_PLUS || type == MINUS_MINUS;
   }
 }
