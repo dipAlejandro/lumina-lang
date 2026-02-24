@@ -18,6 +18,7 @@ public class Parser {
 
   private final List<Token> tokens;
   private final Set<String> procNames = new HashSet<>();
+  private final Set<String> constNames = new HashSet<>();
   private int pos = 0;
 
   public Parser(List<Token> tokens) {
@@ -29,6 +30,10 @@ public class Parser {
 
     // Primera pasada: Registrar que nombres son procs
     for (Token t : tokens) {
+      if (t.type == CONST) {
+        int idx = tokens.indexOf(t) + 1;
+        constNames.add(tokens.get(idx).value);
+      }
       if (t.type == PROC) {
         int idx = tokens.indexOf(t) + 1;
         procNames.add(tokens.get(idx).value);
@@ -50,6 +55,8 @@ public class Parser {
       return parseVarDecl(false);
     if (check(FUN))
       return parseFunDecl();
+    if (check(CONST))
+      return parseConstDecl();
     if (check(PROC))
       return parseProcDecl();
     if (check(IF))
@@ -85,6 +92,15 @@ public class Parser {
       matchOptional(SEMICOLON);
 
     return new AST.VarDecl(name, init);
+  }
+
+  private AST.ConstDecl parseConstDecl() {
+    consume(CONST);
+    String name = consume(IDENTIFIER).value;
+    consume(ASSIGN);
+    AST.Node init = parseExpression();
+    consume(SEMICOLON);
+    return new AST.ConstDecl(name, init);
   }
 
   private AST.FunDecl parseFunDecl() {
@@ -172,9 +188,6 @@ public class Parser {
     // consume(ASSIGN);
     // AST.Node stepVal = parseExpression();
     AST.Node step = parseExpression();
-    System.out.println("Step nodo: " + step);
-    // System.out.println("Token actual: " + current());
-    // System.out.println("Token siguiente: " + peek(1));
     consume(RPAREN);
 
     // For arrow
@@ -242,6 +255,8 @@ public class Parser {
       return new AST.ExportProc((AST.ProcDecl) parseProcDecl());
     if (check(VAR))
       return new AST.ExportVar(parseVarDecl(true));
+    if (check(CONST))
+      return new AST.ExportConst(parseConstDecl());
     throw new RuntimeException("Se esperaba fun, proc o var después de export en línea " + current().line);
   }
 
@@ -256,6 +271,8 @@ public class Parser {
     // Asignación compuesta: i += 1
     if (check(IDENTIFIER) && isCompoundAssign(peek(1).type)) {
       String name = consume(IDENTIFIER).value;
+      if (constNames.contains(name))
+        throw new RuntimeException("No se puede reasignar la constante '" + name + "' en línea " + current().line);
       String op = advance().value;
       return new AST.CompoundAssign(name, op, parseExpression());
     }
@@ -263,13 +280,17 @@ public class Parser {
     // Asignación simple: i = expr
     if (check(IDENTIFIER) && peek(1).type == ASSIGN) {
       String name = consume(IDENTIFIER).value;
+      if (constNames.contains(name))
+        throw new RuntimeException("No se puede reasignar la constante '" + name + "' en línea " + current().line);
       consume(ASSIGN);
       return new AST.Assign(name, parseExpression());
     }
 
-    // Sufijo: i++ / i-- ← agregar esto
+    // Sufijo: i++ / i--
     if (check(IDENTIFIER) && isSuffixIncrement(peek(1).type)) {
       String name = consume(IDENTIFIER).value;
+      if (constNames.contains(name))
+        throw new RuntimeException("No se puede reasignar la constante '" + name + "' en línea " + current().line);
       String op = advance().value;
       return new AST.Increment(name, op, false);
     }

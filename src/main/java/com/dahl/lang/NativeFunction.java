@@ -58,6 +58,7 @@ public class NativeFunction {
     reg("trunc", 1, args -> args.get(0) instanceof Double d
         ? (d >= 0 ? Math.floor(d) : Math.ceil(d))
         : toDouble(args, 0));
+
   }
 
   private static void reg(String name, int arity, NativeImpl impl) {

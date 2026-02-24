@@ -14,7 +14,7 @@ public class Lexer {
     NUMBER, STRING, BOOLEAN, NULL,
     // Identifiers & keywords
     IDENTIFIER,
-    VAR, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM,
+    VAR, CONST, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM,
     // Arithmetic operators
     PLUS, MINUS, STAR, SLASH, PERCENT,
     PLUS_ASSIGN, MINUS_ASSIGN, STAR_ASSIGN, SLASH_ASSIGN,
@@ -98,6 +98,7 @@ public class Lexer {
         String word = source.substring(start, pos);
         TokenType type = switch (word) {
             case "var"    -> TokenType.VAR;
+            case "const" -> TokenType.CONST;
             case "fun"    -> TokenType.FUN;
             case "proc" -> TokenType.PROC;
             case "return" -> TokenType.RETURN;

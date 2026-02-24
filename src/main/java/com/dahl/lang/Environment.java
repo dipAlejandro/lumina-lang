@@ -1,7 +1,9 @@
 package com.dahl.lang;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Ambito de variables con soporte de scopes anidados
@@ -9,6 +11,7 @@ import java.util.Map;
 public class Environment {
 
   private final Map<String, Object> variables = new HashMap<>();
+  private final Set<String> constants = new HashSet<>();
   private final Environment parent;
 
   public Environment(Environment parent) {
@@ -23,6 +26,11 @@ public class Environment {
     variables.put(name, value);
   }
 
+  public void defineConst(String name, Object value) {
+    variables.put(name, value);
+    constants.add(name);
+  }
+
   public Object get(String name) {
     if (variables.containsKey(name))
       return variables.get(name);
@@ -32,6 +40,9 @@ public class Environment {
   }
 
   public void set(String name, Object value) {
+    if (constants.contains(name))
+      throw new RuntimeException("No se puede reasignar la constante '" + name + "'");
+    
     if (variables.containsKey(name)) {
       variables.put(name, value);
       return;

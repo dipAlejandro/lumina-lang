@@ -12,6 +12,7 @@ public interface Node {}
 
 public record Program(List<Node> statements) implements Node{}
 public record VarDecl(String name, Node initializer) implements Node {}
+public record ConstDecl(String name, Node initializer) implements Node {}
 public record Assign(String name, Node value) implements Node{}
 public record CompoundAssign(String name, String op, Node value) implements Node {}
 public record If(Node condition, Block thenBranch, Block elseBranch) implements Node {}
@@ -29,6 +30,7 @@ public record Import(String namespace,String path) implements Node {}
 public record ExportFun(FunDecl decl) implements Node {}
 public record ExportProc(ProcDecl decl) implements Node {}
 public record ExportVar(VarDecl decl) implements Node {}
+public record ExportConst(ConstDecl decl) implements Node {}
 public record ExprStmt(Node expr) implements Node {}
 public record ArrowExpr(Node condExpr, ProcCall procCall) implements Node {};
 

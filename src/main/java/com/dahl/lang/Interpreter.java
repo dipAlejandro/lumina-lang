@@ -93,6 +93,16 @@ public class Interpreter {
         yield null;
       }
 
+      case AST.ConstDecl c -> {
+        Object val = evaluate(c.initializer(), env);
+        env.defineConst(c.name(), val);
+        yield null;
+      }
+
+      case AST.ExportConst ec -> {
+        execute(ec.decl(), env);
+        yield null;
+      }
       case AST.VarDecl v -> {
         Object val = v.initializer() != null ? evaluate(v.initializer(), env) : null;
         env.define(v.name(), val);
@@ -490,7 +500,9 @@ public class Interpreter {
         modCallables.put(pc.name(), new Procedure(pc, modEnv));
       } else if (stmt instanceof AST.ExportVar ev) {
         execute(ev.decl(), modEnv);
-      } // Lo que no tiene 'export' se ejecuta pero no se expone
+      } else if (stmt instanceof AST.ExportConst ec)
+        execute(ec.decl(), modEnv);
+      // Lo que no tiene 'export' se ejecuta pero no se expone
       else {
         execute(stmt, modEnv);
       }
