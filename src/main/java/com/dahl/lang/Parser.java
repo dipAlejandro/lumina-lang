@@ -1,8 +1,5 @@
 package com.dahl.lang;
 
-import com.dahl.lang.Lexer.TokenType;
-import static com.dahl.lang.Lexer.TokenType.*;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -10,6 +7,9 @@ import java.util.Set;
 
 import com.dahl.lang.AST;
 import com.dahl.lang.Lexer.Token;
+
+import com.dahl.lang.Lexer.TokenType;
+import static com.dahl.lang.Lexer.TokenType.*;
 
 /**
  * Parser
@@ -19,6 +19,7 @@ public class Parser {
   private final List<Token> tokens;
   private final Set<String> procNames = new HashSet<>();
   private final Set<String> constNames = new HashSet<>();
+  private final Set<String> moduleNames = new HashSet<>();
   private int pos = 0;
 
   public Parser(List<Token> tokens) {
@@ -30,6 +31,11 @@ public class Parser {
 
     // Primera pasada: Registrar que nombres son procs
     for (Token t : tokens) {
+      if (t.type == IMPORT) {
+        int idx = tokens.indexOf(t) + 1;
+        moduleNames.add(tokens.get(idx).value);
+      }
+      
       if (t.type == CONST) {
         int idx = tokens.indexOf(t) + 1;
         constNames.add(tokens.get(idx).value);
@@ -403,11 +409,32 @@ public class Parser {
       advance();
       return new AST.Literal(null);
     }
+
+    // Literal array
+    if (check(LBRACKET)) {
+      advance();
+      List<AST.Node> elements = new ArrayList<>();
+      if (!check(RBRACKET)) {
+        elements.add(parseExpression());
+        while (match(COMMA))
+          elements.add(parseExpression());
+      }
+      consume(RBRACKET);
+      return new AST.ArrayLiteral(elements);
+    }
+
     // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
 
-      if (match(DOT)) { // match consume el DOT
+      // Sufijo: i++ / i--
+      if (check(PLUS_PLUS) || check(MINUS_MINUS)) {
+        String op = advance().value;
+        return new AST.Increment(name, op, false);
+      }
+
+      // Acceso a propiedad o método: arr.length, arr.push(x), namespace.fun()
+      if (match(DOT)) {
         String member = consume(IDENTIFIER).value;
         if (match(LPAREN)) {
           List<AST.Node> args = new ArrayList<>();
@@ -417,43 +444,54 @@ public class Parser {
               args.add(parseExpression());
           }
           consume(RPAREN);
-          return new AST.NamespaceCall(name, member, args);
+          // Si es namespace conocido → NamespaceCall, si no → MethodCall
+          if (moduleNames.contains(name)) {
+            return new AST.NamespaceCall(name, member, args);
+          }
+          return new AST.MethodCall(new AST.Var(name), member, args);
         }
-        return new AST.NamespaceVar(name, member);
+        // Propiedad sin paréntesis: arr.length o namespace.PI
+        if (moduleNames.contains(name)) {
+          return new AST.NamespaceVar(name, member);
+        }
+        return new AST.PropertyAccess(new AST.Var(name), member);
       }
 
+      // Llamada a función o proc
       if (match(LPAREN)) {
         List<AST.Node> args = new ArrayList<>();
-
         if (!check(RPAREN)) {
           args.add(parseExpression());
           while (match(COMMA))
             args.add(parseExpression());
         }
-
         consume(RPAREN);
-
-        // Decidir el nodo correcto
-        if (procNames.contains(name)) {
+        if (procNames.contains(name))
           return new AST.ProcCall(name, args);
-        }
-
         return new AST.FunCall(name, args);
+      }
 
+      // Acceso por índice: arr[0]
+      if (check(LBRACKET)) {
+        advance();
+        AST.Node index = parseExpression();
+        consume(RBRACKET);
+        return new AST.ArrayAccess(new AST.Var(name), index);
       }
 
       return new AST.Var(name);
     }
+
     // Grouped expression
     if (match(LPAREN)) {
       AST.Node expr = parseExpression();
       consume(RPAREN);
       return expr;
     }
+
     throw new RuntimeException(
         "Se esperaba una expresión en línea " + current().line + " pero se encontró: '" + current().value + "'");
   }
-
   // ── Token utilities ───────────────────────────────────────────────────────
 
   private Token consume(TokenType type) {

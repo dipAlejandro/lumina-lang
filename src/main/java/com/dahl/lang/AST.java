@@ -8,8 +8,8 @@ import java.util.List;
 public class AST {
 
 public interface Node {}
-// Statements
 
+// Statements
 public record Program(List<Node> statements) implements Node{}
 public record VarDecl(String name, Node initializer) implements Node {}
 public record ConstDecl(String name, Node initializer) implements Node {}
@@ -34,15 +34,22 @@ public record ExportConst(ConstDecl decl) implements Node {}
 public record ExprStmt(Node expr) implements Node {}
 public record ArrowExpr(Node condExpr, ProcCall procCall) implements Node {};
 
-// Expressions
+// Data structs
+public record  ArrayLiteral(List<Node> elements) implements Node {}
+public record ArrayAccess(Node array, Node index) implements Node {}
+public record ArrayAssign(Node array, Node index, Node value) implements Node {}
 
+// Expressions
 public record Binary(Node left, String op, Node right) implements Node {}
 public record Unary(String op, Node operand) implements Node {}
 public record Ternary(Node condition, Node consequence, Node alternative) implements Node {}
 public record FunCall(String callee, List<Node> args) implements Node {}
 public record ProcCall(String callee, List<Node> args) implements Node {}
 public record NamespaceCall(String namespace, String member, List<Node> args) implements Node {}
-public record NamespaceVar(String namespace, String member) implements Node {}public record Var(String name) implements Node {}
+public record NamespaceVar(String namespace, String member) implements Node {}
+public record MethodCall(Node object, String method, List<Node> args) implements Node {}
+public record PropertyAccess(Node object, String property) implements Node {}
+public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
 public record Increment (String name, String op, boolean prefix) implements Node {}
 }

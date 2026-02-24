@@ -1,6 +1,7 @@
 package com.dahl.lang;
 
 import java.io.IOException;
+import java.lang.annotation.Target;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -204,10 +205,88 @@ public class Interpreter {
 
   // Evaluation
 
+  @SuppressWarnings("unchecked")
   private Object evaluate(AST.Node node, Environment env) {
     return switch (node) {
 
       case AST.Literal l -> l.value();
+
+      case AST.ArrayLiteral al -> {
+        List<Object> elements = new ArrayList<>();
+        for (AST.Node el : al.elements())
+          elements.add(evaluate(el, env));
+
+        yield elements;
+      }
+
+      case AST.ArrayAccess aa -> {
+        Object target = evaluate(aa.array(), env);
+        if (!(target instanceof List<?> list))
+          throw new RuntimeException("Solo se puede indexar un array");
+
+        int idx = (int) toNumber(evaluate(aa.index(), env));
+        if (idx < 0 || idx >= list.size())
+          throw new RuntimeException("Indice fuera de rango: " + idx);
+
+        yield list.get(idx);
+      }
+
+      case AST.ArrayAssign aa -> {
+        Object target = evaluate(aa.array(), env);
+        if (!(target instanceof List list))
+          throw new RuntimeException("Solo se puede indexar un array");
+
+        int idx = (int) toNumber(evaluate(aa.index(), env));
+        if (idx < 0 || idx >= list.size())
+          throw new RuntimeException("Indice fuera de rango: " + idx);
+
+        Object val = evaluate((aa.value()), env);
+        list.set(idx, val);
+
+        yield val;
+      }
+
+      case AST.PropertyAccess pa -> {
+        Object target = evaluate(pa.object(), env);
+        if (pa.property().equals("len")) {
+          if (!(target instanceof List<?> list))
+            throw new RuntimeException("'len' solo existe en arrays");
+
+          yield (double) list.size();
+        }
+        throw new RuntimeException("Propiedad desconocida: '" + pa.property() + "'");
+      }
+
+      case AST.MethodCall mc -> {
+        Object target = evaluate(mc.object(), env);
+        if (!(target instanceof List list))
+          throw new RuntimeException("Metodo '" + mc.method() + "' solo existe en arrays");
+
+        yield switch (mc.method()) {
+          case "push" -> {
+            if (mc.args().size() != 1)
+              throw new RuntimeException("push() espera un argumento");
+            list.add(evaluate(mc.args().get(0), env));
+            yield null;
+          }
+
+          case "pop" -> {
+            if (list.isEmpty())
+              throw new RuntimeException("pop() sobre array vacio");
+
+            yield list.remove(list.size() - 1);
+          }
+
+          case "contains" -> {
+            if (mc.args().size() != 1)
+              throw new RuntimeException();
+            Object target2 = evaluate(mc.args().get(0), env);
+            yield list.stream().anyMatch(e -> isEqual(e, target2));
+          }
+
+          default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
+        };
+      }
 
       case AST.Var v -> env.get(v.name());
 
