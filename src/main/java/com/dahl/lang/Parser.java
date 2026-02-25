@@ -35,7 +35,7 @@ public class Parser {
         int idx = tokens.indexOf(t) + 1;
         moduleNames.add(tokens.get(idx).value);
       }
-      
+
       if (t.type == CONST) {
         int idx = tokens.indexOf(t) + 1;
         constNames.add(tokens.get(idx).value);
@@ -189,10 +189,7 @@ public class Parser {
     AST.VarDecl init = parseVarDecl(true);
     AST.Node condition = parseExpression();
     consume(SEMICOLON);
-    // step: expr
-    // String stepName = consume(IDENTIFIER).value;
-    // consume(ASSIGN);
-    // AST.Node stepVal = parseExpression();
+
     AST.Node step = parseExpression();
     consume(RPAREN);
 
