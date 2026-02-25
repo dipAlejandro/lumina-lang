@@ -57,6 +57,7 @@ public class Parser {
   // Statements
 
   private AST.Node parseStatement() {
+
     if (check(VAR))
       return parseVarDecl(false);
     if (check(FUN))
@@ -384,6 +385,7 @@ public class Parser {
   }
 
   private AST.Node parsePrimary() {
+
     // Number
     if (check(NUMBER)) {
       String val = advance().value;
@@ -418,6 +420,35 @@ public class Parser {
       }
       consume(RBRACKET);
       return new AST.ArrayLiteral(elements);
+    }
+
+    if (check(LBRACE)) {
+      // Distinguir mapa de bloque
+      // Mapa: { "key", value }
+      // Bloque: { stmt; stmt; }
+
+      if (peek(1).type == STRING && peek(2).type == COLON || peek(1).type == RBRACE) {
+        advance(); // consume {
+        List<String> keys = new ArrayList<>();
+        List<AST.Node> values = new ArrayList<>();
+
+        if (!check(RBRACE)) {
+          String key = consume(STRING).value;
+          consume(COLON);
+          AST.Node value = parseExpression();
+          keys.add(key);
+          values.add(value);
+          while (match(COMMA)) {
+            key = consume(STRING).value;
+            consume(COLON);
+            value = parseExpression();
+            keys.add(key);
+            values.add(value);
+          }
+        }
+        consume(RBRACE);
+        return new AST.MapLiteral(keys, values);
+      }
     }
 
     // Function call, procedure call or variable

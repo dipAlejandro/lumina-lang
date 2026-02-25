@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -211,6 +212,14 @@ public class Interpreter {
 
       case AST.Literal l -> l.value();
 
+      case AST.MapLiteral ml -> {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < ml.keys().size(); i++)
+          map.put(ml.keys().get(i), evaluate(ml.values().get(i), env));
+
+        yield map;
+      }
+
       case AST.ArrayLiteral al -> {
         List<Object> elements = new ArrayList<>();
         for (AST.Node el : al.elements())
@@ -248,44 +257,134 @@ public class Interpreter {
 
       case AST.PropertyAccess pa -> {
         Object target = evaluate(pa.object(), env);
-        if (pa.property().equals("len")) {
-          if (!(target instanceof List<?> list))
-            throw new RuntimeException("'len' solo existe en arrays");
 
-          yield (double) list.size();
-        }
-        throw new RuntimeException("Propiedad desconocida: '" + pa.property() + "'");
+        yield switch (pa.property()) {
+
+          case "len" -> {
+            if (!(target instanceof List<?> list))
+              throw new RuntimeException("'len' solo existe en arrays");
+            yield (double) list.size();
+          }
+
+          case "size" -> {
+            if (!(target instanceof Map<?, ?> map))
+              throw new RuntimeException("'size' solo existe en mapas");
+            yield (double) map.size();
+          }
+
+          default -> throw new RuntimeException("Propiedad '" + pa.property() + "' desconocida");
+        };
+
       }
 
       case AST.MethodCall mc -> {
         Object target = evaluate(mc.object(), env);
-        if (!(target instanceof List list))
-          throw new RuntimeException("Metodo '" + mc.method() + "' solo existe en arrays");
 
-        yield switch (mc.method()) {
-          case "push" -> {
-            if (mc.args().size() != 1)
-              throw new RuntimeException("push() espera un argumento");
-            list.add(evaluate(mc.args().get(0), env));
-            yield null;
-          }
+        // Métodos de arrays
+        if (target instanceof List list) {
 
-          case "pop" -> {
-            if (list.isEmpty())
-              throw new RuntimeException("pop() sobre array vacio");
+          yield switch (mc.method()) {
+            case "push" -> {
+              if (mc.args().size() != 1)
+                throw new RuntimeException("push() espera un argumento");
+              list.add(evaluate(mc.args().get(0), env));
+              yield null;
+            }
 
-            yield list.remove(list.size() - 1);
-          }
+            case "pop" -> {
+              if (list.isEmpty())
+                throw new RuntimeException("pop() sobre array vacio");
 
-          case "contains" -> {
-            if (mc.args().size() != 1)
-              throw new RuntimeException();
-            Object target2 = evaluate(mc.args().get(0), env);
-            yield list.stream().anyMatch(e -> isEqual(e, target2));
-          }
+              yield list.remove(list.size() - 1);
+            }
 
-          default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
-        };
+            case "contains" -> {
+              if (mc.args().size() != 1)
+                throw new RuntimeException();
+              Object target2 = evaluate(mc.args().get(0), env);
+              yield list.stream().anyMatch(e -> isEqual(e, target2));
+            }
+
+            default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
+          };
+        }
+
+        if (target instanceof Map map) {
+          yield switch (mc.method()) {
+            case "get" -> {
+              if (mc.args().size() != 1)
+                throw new RuntimeException("get() espera 1 argumento");
+
+              String key = stringify(evaluate(mc.args().get(0), env));
+              if (!map.containsKey(key))
+                throw new RuntimeException("Clave no encontrada: '" + key + "'");
+              yield map.get(key);
+            }
+
+            case "put" -> {
+              if (mc.args().size() != 2)
+                throw new RuntimeException("put() espera 2 argumentos");
+
+              String key = stringify(evaluate(mc.args().get(0), env));
+              Object value = evaluate(mc.args().get(1), env);
+              yield map.put(key, value);
+            }
+
+            case "remove" -> {
+              if (mc.args().size() != 1)
+                throw new RuntimeException("remove() espera 1 argumento");
+
+              String key = stringify(evaluate(mc.args().get(0), env));
+              yield map.remove(key);
+            }
+
+            case "contains_key" -> {
+
+              if (mc.args().size() != 1)
+                throw new RuntimeException("contains_key() espera 1 argumento");
+
+              String key = stringify(evaluate(mc.args().get(0), env));
+              yield map.containsKey(key);
+            }
+
+            case "contains_val" -> {
+
+              if (mc.args().size() != 1)
+                throw new RuntimeException("contains_val() espera 1 argumento");
+
+              Object val = evaluate(mc.args().get(0), env);
+              yield map.containsValue(val);
+            }
+
+            case "keys" -> {
+
+              if (mc.args().size() != 0)
+                throw new RuntimeException("keys() no espera argumentos");
+
+              yield new ArrayList<>(map.keySet());
+            }
+
+            case "values" -> {
+
+              if (mc.args().size() != 0)
+                throw new RuntimeException("values() no espera argumentos");
+
+              yield new ArrayList<>(map.values());
+            }
+
+            case "clear" -> {
+
+              if (mc.args().size() != 0)
+                throw new RuntimeException("clear() no espera argumentos");
+
+              map.clear();
+              yield null;
+            }
+
+            default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
+          };
+        }
+        throw new RuntimeException("Método '" + mc.method() + "' no aplicable a este tipo");
       }
 
       case AST.Var v -> env.get(v.name());
