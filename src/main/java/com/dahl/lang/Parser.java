@@ -87,6 +87,8 @@ public class Parser {
 
   private AST.VarDecl parseVarDecl(boolean requiredSemicolon) {
     consume(VAR);
+    // Tipado opcional
+    String type = checkType() ? consumeType() : "any";
     String name = consume(IDENTIFIER).value;
 
     AST.Node init = null;
@@ -98,50 +100,63 @@ public class Parser {
     else
       matchOptional(SEMICOLON);
 
-    return new AST.VarDecl(name, init);
+    return new AST.VarDecl(type, name, init);
   }
 
   private AST.ConstDecl parseConstDecl() {
     consume(CONST);
+    // Tipado opcional
+    String type = checkType() ? consumeType() : "any";
     String name = consume(IDENTIFIER).value;
     consume(ASSIGN);
     AST.Node init = parseExpression();
     consume(SEMICOLON);
-    return new AST.ConstDecl(name, init);
+    return new AST.ConstDecl(type, name, init);
   }
 
   private AST.FunDecl parseFunDecl() {
     consume(FUN);
+    // Tipo de retorno obligatorio
+    String returnType = consumeType();
     String name = consume(IDENTIFIER).value;
     consume(LPAREN);
+    List<String> paramTypes = new ArrayList<>();
     List<String> params = new ArrayList<>();
     if (!check(RPAREN)) {
+      String pType = checkType() ? consumeType() : "any";
       params.add(consume(IDENTIFIER).value);
       while (match(COMMA)) {
+        pType = checkType() ? consumeType() : "any";
+        paramTypes.add(pType);
         params.add(consume(IDENTIFIER).value);
       }
     }
     consume(RPAREN);
     AST.Block body = parseBlock();
-    return new AST.FunDecl(name, params, body);
+    return new AST.FunDecl(returnType, name, paramTypes, params, body);
   }
 
   private AST.ProcDecl parseProcDecl() {
     consume(PROC);
     String name = consume(IDENTIFIER).value;
     consume(LPAREN);
+
+    List<String> paramTypes = new ArrayList<>();
     List<String> params = new ArrayList<>();
 
     if (!check(RPAREN)) {
+      String pType = checkType() ? consumeType() : "any";
+      paramTypes.add(pType);
       params.add(consume(IDENTIFIER).value);
       while (match(COMMA)) {
+        pType = checkType() ? consumeType() : "any";
+        paramTypes.add(pType);
         params.add(consume(IDENTIFIER).value);
       }
     }
-
     consume(RPAREN);
     AST.Block body = parseBlock();
-    return new AST.ProcDecl(name, params, body);
+    return new AST.ProcDecl(name, paramTypes, params, body);
   }
 
   private AST.Node parseIf() {
@@ -570,5 +585,18 @@ public class Parser {
 
   private boolean isSuffixIncrement(TokenType type) {
     return type == PLUS_PLUS || type == MINUS_MINUS;
+  }
+
+  private boolean checkType() {
+    return check(INT) || check(FLOAT) || check(STR) ||
+        check(BOOL) || check(ARRAY) || check(MAP) || check(ANY);
+  }
+
+  private String consumeType() {
+    if (!checkType())
+      throw new RuntimeException(
+          "Se esperaba un tipo en línea " + current().line +
+              " pero se encontró '" + current().value + "'");
+    return advance().value;
   }
 }
