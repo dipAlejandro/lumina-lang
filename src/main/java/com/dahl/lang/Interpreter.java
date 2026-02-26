@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.annotation.Target;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -127,15 +128,17 @@ public class Interpreter {
         yield null;
       }
 
-      /*case AST.Assign a -> {
-        Object val = evaluate(a.value(), env);
-        // Verificar tipo declarado si existe
-        String declaredType = env.getType(a.name());
-        if (declaredType != null && !declaredType.equals("any"))
-          TypeChecker.check(declaredType, val, a.name(), currentFile, 0);
-        env.set(a.name(), val);
-        yield val;
-      }*/
+      /*
+       * case AST.Assign a -> {
+       * Object val = evaluate(a.value(), env);
+       * // Verificar tipo declarado si existe
+       * String declaredType = env.getType(a.name());
+       * if (declaredType != null && !declaredType.equals("any"))
+       * TypeChecker.check(declaredType, val, a.name(), currentFile, 0);
+       * env.set(a.name(), val);
+       * yield val;
+       * }
+       */
 
       case AST.If i -> {
         if (isTruthy(evaluate(i.condition(), env))) {
@@ -427,19 +430,26 @@ public class Interpreter {
         yield switch (b.op()) {
           case "+" -> {
             if (left instanceof String || right instanceof String)
+
               yield stringify(left) + stringify(right);
+
             yield toNumber(left) + toNumber(right);
           }
-          case "-" -> toNumber(left) - toNumber(right);
+          case "-" ->
+
+            toNumber(left) - toNumber(right);
           case "*" -> toNumber(left) * toNumber(right);
           case "/" -> {
             double r = toNumber(right);
             if (r == 0)
               throw new RuntimeException(
                   String.format("[%s] Error: División por cero", currentFile));
+
             yield toNumber(left) / r;
           }
-          case "%" -> toNumber(left) % toNumber(right);
+          case "%" ->
+
+            toNumber(left) % toNumber(right);
           case "==" -> isEqual(left, right);
           case "!=" -> !isEqual(left, right);
           case "<" -> toNumber(left) < toNumber(right);
@@ -453,7 +463,9 @@ public class Interpreter {
         };
       }
 
-      case AST.CompoundAssign ca -> {
+      case
+
+          AST.CompoundAssign ca -> {
         double current = toNumber(env.get(ca.name()));
         double operand = toNumber(evaluate(ca.value(), env));
         double result = switch (ca.op()) {
@@ -469,25 +481,43 @@ public class Interpreter {
           default -> throw new RuntimeException(
               String.format("[%s] Error: Operador compuesto desconocido: '%s'", currentFile, ca.op()));
         };
+
+        // validar que el resultado sea compatible con el tipo declarado
+        String declaredType = env.getType(ca.name());
+        if (declaredType != null && !declaredType.equals("any")) {
+          TypeChecker.check(declaredType, result, ca.name(), currentFile, 0);
+        }
         env.set(ca.name(), result);
         yield result;
       }
 
-      case AST.Increment inc -> {
+      case
+          AST.Increment inc -> {
         double current = toNumber(env.get(inc.name()));
         double next = inc.op().equals("++") ? current + 1 : current - 1;
+
+        // validar que el resultado sea compatible con el tipo declarado
+        String declaredType = env.getType(inc.name());
+        if (declaredType != null && !declaredType.equals("any")) {
+          TypeChecker.check(declaredType, next, inc.name(), currentFile, 0);
+        }
+
         env.set(inc.name(), next);
         yield inc.prefix() ? next : current;
       }
 
-      case AST.Ternary t -> {
+      case
+          AST.Ternary t -> {
         Object condition = evaluate(t.condition(), env);
+
         yield isTruthy(condition)
             ? evaluate(t.consequence(), env)
             : evaluate(t.alternative(), env);
       }
 
-      case AST.FunCall fc -> {
+      case
+
+          AST.FunCall fc -> {
         if (NativeFunction.isNative(fc.callee())) {
           List<Object> evaluatedArgs = new ArrayList<>();
           for (AST.Node arg : fc.args())
@@ -534,8 +564,10 @@ public class Interpreter {
         }
       }
 
-      case AST.ProcCall pc -> {
+      case
+          AST.ProcCall pc -> {
         Procedure pr = resolveProcedure(pc.callee());
+        List<String> paramTypes = pr.decl().paramTypes();
         List<String> params = pr.decl().params();
         List<AST.Node> args = pc.args();
 
@@ -545,8 +577,15 @@ public class Interpreter {
                   currentFile, pc.line(), pc.callee(), params.size(), args.size()));
 
         Environment callEnv = new Environment(pr.closure());
-        for (int i = 0; i < params.size(); i++)
-          callEnv.define(params.get(i), evaluate(args.get(i), env));
+        for (int i = 0; i < params.size(); i++) {
+          Object argVal = evaluate(args.get(i), env);
+          String pType = paramTypes.get(i);
+          if (!pType.equals("any"))
+            TypeChecker.check(pType, argVal, pc.callee() + "(" + params.get(i) + ")", currentFile, pc.line());
+
+          callEnv.define(params.get(i), argVal);
+          callEnv.defineType(params.get(i), pType);
+        }
 
         try {
           executeBlock(pr.decl().body(), callEnv);
@@ -559,7 +598,8 @@ public class Interpreter {
         yield null;
       }
 
-      case AST.NamespaceCall nc -> {
+      case
+          AST.NamespaceCall nc -> {
         Module mod = modules.get(nc.namespace());
         if (mod == null)
           throw new RuntimeException(
@@ -571,52 +611,70 @@ public class Interpreter {
               String.format("[%s] Error: '%s' no existe en módulo '%s'",
                   currentFile, nc.member(), nc.namespace()));
 
+        // Evaluar y validar argumentos
         List<Object> evaluatedArgs = new ArrayList<>();
-        for (AST.Node arg : nc.args())
-          evaluatedArgs.add(evaluate(arg, env));
+        List<String> paramTypes = callable instanceof Function fn
+            ? fn.decl().paramTypes()
+            : ((Procedure) callable).decl().paramTypes();
+        List<String> params = callable instanceof Function fn
+            ? fn.decl().params()
+            : ((Procedure) callable).decl().params();
+
+        List<AST.Node> args = nc.args();
+        if (params.size() != args.size())
+          throw new RuntimeException(
+              String.format("[%s] Error: '%s.%s' espera %d argumento(s), recibió %d",
+                  currentFile, nc.namespace(), nc.member(), params.size(), args.size()));
+
+        for (int i = 0; i < params.size(); i++) {
+          Object argVal = evaluate(args.get(i), env);
+          String pType = paramTypes.get(i);
+          if (!pType.equals("any"))
+            TypeChecker.check(pType, argVal,
+                nc.namespace() + "." + nc.member() + "(" + params.get(i) + ")",
+                currentFile, 0);
+          evaluatedArgs.add(argVal);
+        }
 
         Module previous = currentModule;
-        currentModule = mod;
         String previousFile = currentFile;
+        currentModule = mod;
         currentFile = nc.namespace() + ".ptl";
 
         try {
           if (callable instanceof Function fn) {
-            List<String> params = fn.decl().params();
-            if (params.size() != evaluatedArgs.size())
-              throw new RuntimeException(
-                  String.format("[%s] Error: '%s' espera %d argumento(s), recibió %d",
-                      currentFile, nc.member(), params.size(), evaluatedArgs.size()));
-
             Environment callEnv = new Environment(fn.closure());
-            for (int i = 0; i < params.size(); i++)
+            for (int i = 0; i < params.size(); i++) {
               callEnv.define(params.get(i), evaluatedArgs.get(i));
-
+              callEnv.defineType(params.get(i), paramTypes.get(i));
+            }
             try {
               executeBlock(fn.decl().body(), callEnv);
+              if (!fn.decl().returnType().equals("any"))
+                throw new RuntimeException(
+                    String.format("[%s] Error: '%s.%s' debe retornar '%s' pero no retornó nada",
+                        currentFile, nc.namespace(), nc.member(), fn.decl().returnType()));
               yield null;
             } catch (ReturnSignal rs) {
+              if (!fn.decl().returnType().equals("any"))
+                TypeChecker.check(fn.decl().returnType(), rs.value,
+                    nc.namespace() + "." + nc.member() + " (retorno)", currentFile, 0);
               yield rs.value;
             }
 
           } else if (callable instanceof Procedure pr) {
-            List<String> params = pr.decl().params();
-            if (params.size() != evaluatedArgs.size())
-              throw new RuntimeException(
-                  String.format("[%s] Error: '%s' espera %d argumento(s), recibió %d",
-                      currentFile, nc.member(), params.size(), evaluatedArgs.size()));
-
             Environment callEnv = new Environment(pr.closure());
-            for (int i = 0; i < params.size(); i++)
+            for (int i = 0; i < params.size(); i++) {
               callEnv.define(params.get(i), evaluatedArgs.get(i));
-
+              callEnv.defineType(params.get(i), paramTypes.get(i));
+            }
             try {
               executeBlock(pr.decl().body(), callEnv);
             } catch (ReturnSignal rs) {
               if (rs.value != null)
                 throw new RuntimeException(
-                    String.format("[%s] Error: El procedimiento '%s' no puede retornar un valor",
-                        currentFile, nc.member()));
+                    String.format("[%s] Error: El procedimiento '%s.%s' no puede retornar un valor",
+                        currentFile, nc.namespace(), nc.member()));
             }
             yield null;
           }
@@ -629,7 +687,8 @@ public class Interpreter {
         }
       }
 
-      case AST.NamespaceVar nv -> {
+      case
+          AST.NamespaceVar nv -> {
         Module mod = modules.get(nv.namespace());
         if (mod == null)
           throw new RuntimeException(
@@ -639,6 +698,7 @@ public class Interpreter {
 
       default -> execute(node, env);
     };
+
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
