@@ -1,3 +1,0 @@
-export proc _error(e) {
-        print("ERROR: " + e);
-    }
