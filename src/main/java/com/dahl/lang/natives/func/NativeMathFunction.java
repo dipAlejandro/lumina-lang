@@ -3,7 +3,7 @@ package com.dahl.lang.natives.func;
 import java.util.List;
 import com.dahl.lang.natives.func.NativeFunction;
 
-class NativeMathFunction extends NativeFunction {
+public final class NativeMathFunction extends NativeFunction {
 
   static {
     // Basic maths

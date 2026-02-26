@@ -7,7 +7,8 @@ import java.util.Map;
 /**
  * NativeFunction
  */
-public class NativeFunction {
+public sealed class NativeFunction
+    permits NativeExceptionFunction, NativeMathFunction, NativeIOFunction, NativeTypeFunction {
 
   @FunctionalInterface
   public interface NativeImpl {

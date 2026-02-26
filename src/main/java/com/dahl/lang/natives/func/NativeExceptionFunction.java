@@ -5,7 +5,7 @@ import com.dahl.lang.natives.func.NativeFunction;
 /**
  * NativeUtilFunction
  */
-public class NativeExceptionFunction extends NativeFunction {
+public final class NativeExceptionFunction extends NativeFunction {
 
   static {
     // Errors

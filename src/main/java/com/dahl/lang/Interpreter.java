@@ -53,8 +53,11 @@ public class Interpreter {
     try {
       Class.forName("com.dahl.lang.natives.func.NativeExceptionFunction");
       Class.forName("com.dahl.lang.natives.func.NativeMathFunction");
+      Class.forName("com.dahl.lang.natives.func.NativeIOFunction");
+      Class.forName("com.dahl.lang.natives.func.NativeTypeFunction");
+      
     } catch (ClassNotFoundException e) {
-      throw new RuntimeException("No se pudo cargar herencia de NativeFunction");
+      throw new RuntimeException("No se pudo cargar herencia de NativeFunction", e);
     }
     // Primer paso: registrar funciones
     for (AST.Node stmt : program.statements()) {
