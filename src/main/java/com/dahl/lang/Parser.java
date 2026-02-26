@@ -86,6 +86,7 @@ public class Parser {
   }
 
   private AST.VarDecl parseVarDecl(boolean requiredSemicolon) {
+    int line = current().line;
     consume(VAR);
     // Tipado opcional
     String type = checkType() ? consumeType() : "any";
@@ -100,10 +101,11 @@ public class Parser {
     else
       matchOptional(SEMICOLON);
 
-    return new AST.VarDecl(type, name, init);
+    return new AST.VarDecl(type, name, init, line);
   }
 
   private AST.ConstDecl parseConstDecl() {
+    int line = current().line;
     consume(CONST);
     // Tipado opcional
     String type = checkType() ? consumeType() : "any";
@@ -111,7 +113,7 @@ public class Parser {
     consume(ASSIGN);
     AST.Node init = parseExpression();
     consume(SEMICOLON);
-    return new AST.ConstDecl(type, name, init);
+    return new AST.ConstDecl(type, name, init, line);
   }
 
   private AST.FunDecl parseFunDecl() {
@@ -124,6 +126,7 @@ public class Parser {
     List<String> params = new ArrayList<>();
     if (!check(RPAREN)) {
       String pType = checkType() ? consumeType() : "any";
+      paramTypes.add(pType);
       params.add(consume(IDENTIFIER).value);
       while (match(COMMA)) {
         pType = checkType() ? consumeType() : "any";

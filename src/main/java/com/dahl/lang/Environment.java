@@ -12,6 +12,7 @@ public class Environment {
 
   private final Map<String, Object> variables = new HashMap<>();
   private final Set<String> constants = new HashSet<>();
+  private final Map<String, String> types = new HashMap<>();
   private final Environment parent;
 
   public Environment(Environment parent) {
@@ -42,7 +43,7 @@ public class Environment {
   public void set(String name, Object value) {
     if (constants.contains(name))
       throw new RuntimeException("No se puede reasignar la constante '" + name + "'");
-    
+
     if (variables.containsKey(name)) {
       variables.put(name, value);
       return;
@@ -58,5 +59,17 @@ public class Environment {
 
   public boolean has(String name) {
     return variables.containsKey(name) || (parent != null && parent.has(name));
+  }
+
+  public void defineType(String name, String type) {
+    types.put(name, type);
+  }
+
+  public String getType(String name) {
+    if (types.containsKey(name))
+      return types.get(name);
+    if (parent != null)
+      return parent.getType(name);
+    return null; // any implícito
   }
 }

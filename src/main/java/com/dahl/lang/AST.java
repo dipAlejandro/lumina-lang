@@ -11,8 +11,8 @@ public interface Node {}
 
 // Statements
 public record Program(List<Node> statements) implements Node{}
-public record VarDecl(String type, String name, Node initializer) implements Node {}
-public record ConstDecl(String type, String name, Node initializer) implements Node {}
+public record VarDecl(String type, String name, Node initializer, int line) implements Node {}
+public record ConstDecl(String type, String name, Node initializer, int line) implements Node {}
 public record Assign(String name, Node value) implements Node{}
 public record CompoundAssign(String name, String op, Node value) implements Node {}
 public record If(Node condition, Block thenBranch, Block elseBranch) implements Node {}
@@ -22,7 +22,7 @@ public record WhileArrow(Node condition, Node body) implements Node {}
 public record For(VarDecl init, Node condition, Node step, Block body) implements Node {}
 public record ForArrow(VarDecl init, Node condition, Node step, Node body) implements Node {}
 public record ProcDecl(String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
-public record FunDecl(String type, String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
+public record FunDecl(String returnType, String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
 public record Return(Node value) implements Node {}
 public record Print(Node value) implements Node {}
 public record Block(List<Node> statements) implements Node {}

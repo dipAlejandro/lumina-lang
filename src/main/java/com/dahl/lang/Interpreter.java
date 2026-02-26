@@ -12,6 +12,7 @@ import java.util.Map;
 
 import com.dahl.lang.AST;
 import com.dahl.lang.Environment;
+import com.dahl.lang.TypeChecker;
 import com.dahl.lang.natives.func.NativeFunction;
 
 public class Interpreter {
@@ -106,24 +107,35 @@ public class Interpreter {
 
       case AST.ConstDecl c -> {
         Object val = evaluate(c.initializer(), env);
+        if (!c.type().equals("any"))
+          TypeChecker.check(c.type(), val, c.name(), currentFile, c.line());
         env.defineConst(c.name(), val);
+        env.defineType(c.name(), c.type());
         yield null;
       }
-
       case AST.ExportConst ec -> {
         execute(ec.decl(), env);
         yield null;
       }
       case AST.VarDecl v -> {
         Object val = v.initializer() != null ? evaluate(v.initializer(), env) : null;
+        // Validar tipo solo si no es any y no hay inicializador
+        if (!v.type().equals("any") && val != null)
+          TypeChecker.check(v.type(), val, v.name(), currentFile, v.line());
         env.define(v.name(), val);
+        env.defineType(v.name(), v.type());
         yield null;
       }
 
-      case AST.Assign a -> {
+      /*case AST.Assign a -> {
         Object val = evaluate(a.value(), env);
+        // Verificar tipo declarado si existe
+        String declaredType = env.getType(a.name());
+        if (declaredType != null && !declaredType.equals("any"))
+          TypeChecker.check(declaredType, val, a.name(), currentFile, 0);
+        env.set(a.name(), val);
         yield val;
-      }
+      }*/
 
       case AST.If i -> {
         if (isTruthy(evaluate(i.condition(), env))) {
@@ -391,12 +403,11 @@ public class Interpreter {
 
       case AST.Assign a -> {
         Object val = evaluate(a.value(), env);
-        try {
-          env.set(a.name(), val);
-        } catch (RuntimeException e) {
-          throw new RuntimeException(
-              String.format("[%s] Error: %s", currentFile, e.getMessage()));
-        }
+        // Verificar tipo declarado si existe
+        String declaredType = env.getType(a.name());
+        if (declaredType != null && !declaredType.equals("any"))
+          TypeChecker.check(declaredType, val, a.name(), currentFile, 0);
+        env.set(a.name(), val);
         yield val;
       }
 
@@ -486,20 +497,39 @@ public class Interpreter {
 
         Function fn = resolveFunction(fc.callee());
         List<String> params = fn.decl().params();
+        List<String> paramTypes = fn.decl().paramTypes();
         List<AST.Node> args = fc.args();
+
         if (params.size() != args.size())
           throw new RuntimeException(
               String.format("[%s:%d] Error: '%s' espera %d argumento(s), recibió %d",
                   currentFile, fc.line(), fc.callee(), params.size(), args.size()));
 
         Environment callEnv = new Environment(fn.closure());
-        for (int i = 0; i < params.size(); i++)
-          callEnv.define(params.get(i), evaluate(args.get(i), env));
+        for (int i = 0; i < params.size(); i++) {
+          Object argVal = evaluate(args.get(i), env);
+          // Validar tipo del argumento
+          String pType = paramTypes.get(i);
+          if (!pType.equals("any"))
+            TypeChecker.check(pType, argVal,
+                fc.callee() + "(" + params.get(i) + ")", currentFile, fc.line());
+          callEnv.define(params.get(i), argVal);
+          callEnv.defineType(params.get(i), pType);
+        }
 
         try {
           executeBlock(fn.decl().body(), callEnv);
+          // Función declaró tipo de retorno pero no retornó nada
+          if (!fn.decl().returnType().equals("any"))
+            throw new RuntimeException(
+                String.format("[%s:%d] Error: '%s' debe retornar '%s' pero no retornó nada",
+                    currentFile, fc.line(), fc.callee(), fn.decl().returnType()));
           yield null;
         } catch (ReturnSignal rs) {
+          // Validar tipo de retorno
+          if (!fn.decl().returnType().equals("any"))
+            TypeChecker.check(fn.decl().returnType(), rs.value,
+                fc.callee() + " (retorno)", currentFile, fc.line());
           yield rs.value;
         }
       }
