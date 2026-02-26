@@ -487,6 +487,7 @@ public class Parser {
 
       // Llamada a función o proc
       if (match(LPAREN)) {
+        int line = tokens.get(pos - 1).line;
         List<AST.Node> args = new ArrayList<>();
         if (!check(RPAREN)) {
           args.add(parseExpression());
@@ -495,8 +496,8 @@ public class Parser {
         }
         consume(RPAREN);
         if (procNames.contains(name))
-          return new AST.ProcCall(name, args);
-        return new AST.FunCall(name, args);
+          return new AST.ProcCall(name, args, line);
+        return new AST.FunCall(name, args, line);
       }
 
       // Acceso por índice: arr[0]

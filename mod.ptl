@@ -1,0 +1,11 @@
+export fun fill_map(map, keys, values) {
+
+    if( keys.len == 0 || values.len == 0 || keys.len != values.len) { 
+        throw_error("El tamaño de los arrays no coincide");
+        return;
+     }
+    
+    for(var i = 0; i < keys.len; i++) -> map.put(keys[i], values[i]);
+
+    return map;
+}

@@ -12,7 +12,7 @@ import java.util.Map;
 
 import com.dahl.lang.AST;
 import com.dahl.lang.Environment;
-import com.dahl.lang.NativeFunction;
+import com.dahl.lang.natives.func.NativeFunction;
 
 public class Interpreter {
   static class ReturnSignal extends RuntimeException {
@@ -44,9 +44,16 @@ public class Interpreter {
   private final Map<String, Module> modules = new HashMap<>();
   private Module currentModule = null; // null = scope global
 
-  // Entry point
+  private String currentFile = "<main>";
 
+  // Entry point
   public void run(AST.Program program) {
+    try {
+      Class.forName("com.dahl.lang.natives.func.NativeExceptionFunction");
+      Class.forName("com.dahl.lang.natives.func.NativeMathFunction");
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException("No se pudo cargar herencia de NativeFunction");
+    }
     // Primer paso: registrar funciones
     for (AST.Node stmt : program.statements()) {
       if (stmt instanceof AST.FunDecl fd) {
@@ -67,15 +74,17 @@ public class Interpreter {
       case AST.Import i -> {
         String src = "";
         AST.Program program;
+        String previousFile = currentFile;
         try {
           src = Files.readString(Path.of(i.path() + ".ptl"));
+          currentFile = i.path() + ".ptl";
           program = new Parser(new Lexer(src).tokenize()).parse();
         } catch (IOException e) {
-          throw new RuntimeException("Modulo '" + src + "' no encontrado.");
+          throw new RuntimeException(
+              String.format("[%s] Error: Módulo '%s' no encontrado", currentFile, i.path()));
         }
-
-        // Ejecutar en modulo en su propio entorno aislado
         Module mod = loadModule(program);
+        currentFile = previousFile;
         modules.put(i.namespace(), mod);
         yield null;
       }
@@ -194,7 +203,8 @@ public class Interpreter {
         yield null;
       }
 
-      default -> throw new RuntimeException("Nodo desconocido: " + node.getClass().getSimpleName());
+      default -> throw new RuntimeException(
+          String.format("[%s] Error: Nodo desconocido: %s", currentFile, node.getClass().getSimpleName()));
     };
   }
 
@@ -216,7 +226,6 @@ public class Interpreter {
         Map<String, Object> map = new LinkedHashMap<>();
         for (int i = 0; i < ml.keys().size(); i++)
           map.put(ml.keys().get(i), evaluate(ml.values().get(i), env));
-
         yield map;
       }
 
@@ -224,88 +233,82 @@ public class Interpreter {
         List<Object> elements = new ArrayList<>();
         for (AST.Node el : al.elements())
           elements.add(evaluate(el, env));
-
         yield elements;
       }
 
       case AST.ArrayAccess aa -> {
         Object target = evaluate(aa.array(), env);
         if (!(target instanceof List<?> list))
-          throw new RuntimeException("Solo se puede indexar un array");
-
+          throw new RuntimeException(
+              String.format("[%s] Error: Solo se puede indexar un array", currentFile));
         int idx = (int) toNumber(evaluate(aa.index(), env));
         if (idx < 0 || idx >= list.size())
-          throw new RuntimeException("Indice fuera de rango: " + idx);
-
+          throw new RuntimeException(
+              String.format("[%s] Error: Índice fuera de rango: %d (tamaño: %d)", currentFile, idx, list.size()));
         yield list.get(idx);
       }
 
       case AST.ArrayAssign aa -> {
         Object target = evaluate(aa.array(), env);
         if (!(target instanceof List list))
-          throw new RuntimeException("Solo se puede indexar un array");
-
+          throw new RuntimeException(
+              String.format("[%s] Error: Solo se puede indexar un array", currentFile));
         int idx = (int) toNumber(evaluate(aa.index(), env));
         if (idx < 0 || idx >= list.size())
-          throw new RuntimeException("Indice fuera de rango: " + idx);
-
-        Object val = evaluate((aa.value()), env);
+          throw new RuntimeException(
+              String.format("[%s] Error: Índice fuera de rango: %d (tamaño: %d)", currentFile, idx, list.size()));
+        Object val = evaluate(aa.value(), env);
         list.set(idx, val);
-
         yield val;
       }
 
       case AST.PropertyAccess pa -> {
         Object target = evaluate(pa.object(), env);
-
         yield switch (pa.property()) {
-
           case "len" -> {
             if (!(target instanceof List<?> list))
-              throw new RuntimeException("'len' solo existe en arrays");
+              throw new RuntimeException(
+                  String.format("[%s] Error: 'len' solo existe en arrays", currentFile));
             yield (double) list.size();
           }
-
           case "size" -> {
             if (!(target instanceof Map<?, ?> map))
-              throw new RuntimeException("'size' solo existe en mapas");
+              throw new RuntimeException(
+                  String.format("[%s] Error: 'size' solo existe en mapas", currentFile));
             yield (double) map.size();
           }
-
-          default -> throw new RuntimeException("Propiedad '" + pa.property() + "' desconocida");
+          default -> throw new RuntimeException(
+              String.format("[%s] Error: Propiedad '%s' desconocida", currentFile, pa.property()));
         };
-
       }
 
       case AST.MethodCall mc -> {
         Object target = evaluate(mc.object(), env);
 
-        // Métodos de arrays
         if (target instanceof List list) {
-
           yield switch (mc.method()) {
             case "push" -> {
               if (mc.args().size() != 1)
-                throw new RuntimeException("push() espera un argumento");
+                throw new RuntimeException(
+                    String.format("[%s] Error: push() espera 1 argumento", currentFile));
               list.add(evaluate(mc.args().get(0), env));
               yield null;
             }
-
             case "pop" -> {
               if (list.isEmpty())
-                throw new RuntimeException("pop() sobre array vacio");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: pop() sobre array vacío", currentFile));
               yield list.remove(list.size() - 1);
             }
-
             case "contains" -> {
               if (mc.args().size() != 1)
-                throw new RuntimeException();
+                throw new RuntimeException(
+                    String.format("[%s] Error: contains() espera 1 argumento", currentFile));
               Object target2 = evaluate(mc.args().get(0), env);
               yield list.stream().anyMatch(e -> isEqual(e, target2));
             }
-
-            default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
+            default -> throw new RuntimeException(
+                String.format("[%s] Error: Método de array desconocido: '%s'", currentFile, mc.method()));
           };
         }
 
@@ -313,85 +316,87 @@ public class Interpreter {
           yield switch (mc.method()) {
             case "get" -> {
               if (mc.args().size() != 1)
-                throw new RuntimeException("get() espera 1 argumento");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: get() espera 1 argumento", currentFile));
               String key = stringify(evaluate(mc.args().get(0), env));
               if (!map.containsKey(key))
-                throw new RuntimeException("Clave no encontrada: '" + key + "'");
+                throw new RuntimeException(
+                    String.format("[%s] Error: Clave no encontrada: '%s'", currentFile, key));
               yield map.get(key);
             }
-
             case "put" -> {
               if (mc.args().size() != 2)
-                throw new RuntimeException("put() espera 2 argumentos");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: put() espera 2 argumentos", currentFile));
               String key = stringify(evaluate(mc.args().get(0), env));
               Object value = evaluate(mc.args().get(1), env);
               yield map.put(key, value);
             }
-
             case "remove" -> {
               if (mc.args().size() != 1)
-                throw new RuntimeException("remove() espera 1 argumento");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: remove() espera 1 argumento", currentFile));
               String key = stringify(evaluate(mc.args().get(0), env));
               yield map.remove(key);
             }
-
             case "contains_key" -> {
-
               if (mc.args().size() != 1)
-                throw new RuntimeException("contains_key() espera 1 argumento");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: contains_key() espera 1 argumento", currentFile));
               String key = stringify(evaluate(mc.args().get(0), env));
               yield map.containsKey(key);
             }
-
             case "contains_val" -> {
-
               if (mc.args().size() != 1)
-                throw new RuntimeException("contains_val() espera 1 argumento");
-
+                throw new RuntimeException(
+                    String.format("[%s] Error: contains_val() espera 1 argumento", currentFile));
               Object val = evaluate(mc.args().get(0), env);
               yield map.containsValue(val);
             }
-
             case "keys" -> {
-
-              if (mc.args().size() != 0)
-                throw new RuntimeException("keys() no espera argumentos");
-
+              if (!mc.args().isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: keys() no espera argumentos", currentFile));
               yield new ArrayList<>(map.keySet());
             }
-
             case "values" -> {
-
-              if (mc.args().size() != 0)
-                throw new RuntimeException("values() no espera argumentos");
-
+              if (!mc.args().isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: values() no espera argumentos", currentFile));
               yield new ArrayList<>(map.values());
             }
-
             case "clear" -> {
-
-              if (mc.args().size() != 0)
-                throw new RuntimeException("clear() no espera argumentos");
-
+              if (!mc.args().isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: clear() no espera argumentos", currentFile));
               map.clear();
               yield null;
             }
-
-            default -> throw new RuntimeException("Método desconocido: '" + mc.method() + "'");
+            default -> throw new RuntimeException(
+                String.format("[%s] Error: Método de mapa desconocido: '%s'", currentFile, mc.method()));
           };
         }
-        throw new RuntimeException("Método '" + mc.method() + "' no aplicable a este tipo");
+        throw new RuntimeException(
+            String.format("[%s] Error: Método '%s' no aplicable a este tipo", currentFile, mc.method()));
       }
 
-      case AST.Var v -> env.get(v.name());
+      case AST.Var v -> {
+        try {
+          yield env.get(v.name());
+        } catch (RuntimeException e) {
+          throw new RuntimeException(
+              String.format("[%s] Error: Variable no definida: '%s'", currentFile, v.name()));
+        }
+      }
 
       case AST.Assign a -> {
         Object val = evaluate(a.value(), env);
-        env.set(a.name(), val);
+        try {
+          env.set(a.name(), val);
+        } catch (RuntimeException e) {
+          throw new RuntimeException(
+              String.format("[%s] Error: %s", currentFile, e.getMessage()));
+        }
         yield val;
       }
 
@@ -400,7 +405,8 @@ public class Interpreter {
         yield switch (u.op()) {
           case "-" -> -(double) toNumber(operand);
           case "!" -> !isTruthy(operand);
-          default -> throw new RuntimeException("Operador unario desconocido: " + u.op());
+          default -> throw new RuntimeException(
+              String.format("[%s] Error: Operador unario desconocido: '%s'", currentFile, u.op()));
         };
       }
 
@@ -410,25 +416,19 @@ public class Interpreter {
         yield switch (b.op()) {
           case "+" -> {
             if (left instanceof String || right instanceof String)
-
               yield stringify(left) + stringify(right);
-
             yield toNumber(left) + toNumber(right);
           }
-          case "-" ->
-
-            toNumber(left) - toNumber(right);
+          case "-" -> toNumber(left) - toNumber(right);
           case "*" -> toNumber(left) * toNumber(right);
           case "/" -> {
             double r = toNumber(right);
             if (r == 0)
-              throw new ArithmeticException("División por cero");
-
+              throw new RuntimeException(
+                  String.format("[%s] Error: División por cero", currentFile));
             yield toNumber(left) / r;
           }
-          case "%" ->
-
-            toNumber(left) % toNumber(right);
+          case "%" -> toNumber(left) % toNumber(right);
           case "==" -> isEqual(left, right);
           case "!=" -> !isEqual(left, right);
           case "<" -> toNumber(left) < toNumber(right);
@@ -437,13 +437,12 @@ public class Interpreter {
           case ">=" -> toNumber(left) >= toNumber(right);
           case "&&" -> isTruthy(left) && isTruthy(right);
           case "||" -> isTruthy(left) || isTruthy(right);
-          default -> throw new RuntimeException("Operador desconocido: " + b.op());
+          default -> throw new RuntimeException(
+              String.format("[%s] Error: Operador desconocido: '%s'", currentFile, b.op()));
         };
       }
 
-      case
-
-          AST.CompoundAssign ca -> {
+      case AST.CompoundAssign ca -> {
         double current = toNumber(env.get(ca.name()));
         double operand = toNumber(evaluate(ca.value(), env));
         double result = switch (ca.op()) {
@@ -452,66 +451,51 @@ public class Interpreter {
           case "*=" -> current * operand;
           case "/=" -> {
             if (operand == 0)
-              throw new ArithmeticException("División por cero");
+              throw new RuntimeException(
+                  String.format("[%s] Error: División por cero en '%s'", currentFile, ca.name()));
             yield current / operand;
           }
-          default -> throw new RuntimeException("Operador compuesto desconocido: " + ca.op());
+          default -> throw new RuntimeException(
+              String.format("[%s] Error: Operador compuesto desconocido: '%s'", currentFile, ca.op()));
         };
-
         env.set(ca.name(), result);
-
         yield result;
       }
 
-      case
-          AST.Increment inc -> {
+      case AST.Increment inc -> {
         double current = toNumber(env.get(inc.name()));
         double next = inc.op().equals("++") ? current + 1 : current - 1;
         env.set(inc.name(), next);
-
         yield inc.prefix() ? next : current;
       }
 
-      case
-          AST.Ternary t -> {
+      case AST.Ternary t -> {
         Object condition = evaluate(t.condition(), env);
-        if (isTruthy(condition)) {
-
-          yield evaluate(t.consequence(), env);
-        } else
-
-        {
-
-          yield evaluate(t.alternative(), env);
-        }
+        yield isTruthy(condition)
+            ? evaluate(t.consequence(), env)
+            : evaluate(t.alternative(), env);
       }
 
-      case
-
-          AST.FunCall fc -> {
-
+      case AST.FunCall fc -> {
         if (NativeFunction.isNative(fc.callee())) {
           List<Object> evaluatedArgs = new ArrayList<>();
           for (AST.Node arg : fc.args())
             evaluatedArgs.add(evaluate(arg, env));
-
-          yield NativeFunction.call(fc.callee(), evaluatedArgs);
+          yield NativeFunction.call(fc.callee(), evaluatedArgs, fc.line(), currentFile);
         }
 
         Function fn = resolveFunction(fc.callee());
-        if (fn == null)
-          throw new RuntimeException("Función no definida: '" + fc.callee() + "'");
-
         List<String> params = fn.decl().params();
         List<AST.Node> args = fc.args();
         if (params.size() != args.size())
-          throw new RuntimeException("'" + fc.callee() + "' espera " + params.size() +
-              " argumento(s), pero recibió " + args.size());
+          throw new RuntimeException(
+              String.format("[%s:%d] Error: '%s' espera %d argumento(s), recibió %d",
+                  currentFile, fc.line(), fc.callee(), params.size(), args.size()));
 
         Environment callEnv = new Environment(fn.closure());
-        for (int i = 0; i < params.size(); i++) {
+        for (int i = 0; i < params.size(); i++)
           callEnv.define(params.get(i), evaluate(args.get(i), env));
-        }
+
         try {
           executeBlock(fn.decl().body(), callEnv);
           yield null;
@@ -520,31 +504,27 @@ public class Interpreter {
         }
       }
 
-      case
-          AST.ProcCall pc -> {
+      case AST.ProcCall pc -> {
         Procedure pr = resolveProcedure(pc.callee());
-        if (pr == null)
-          throw new RuntimeException("Procedimiento no definido: '" + pc.callee() + "'");
-
         List<String> params = pr.decl().params();
         List<AST.Node> args = pc.args();
 
         if (params.size() != args.size())
           throw new RuntimeException(
-              "'" + pc.callee() + "' espera " + params.size() + " argumentos, pero recibió " + args.size());
+              String.format("[%s:%d] Error: '%s' espera %d argumento(s), recibió %d",
+                  currentFile, pc.line(), pc.callee(), params.size(), args.size()));
 
         Environment callEnv = new Environment(pr.closure());
-        for (int i = 0; i < params.size(); i++) {
+        for (int i = 0; i < params.size(); i++)
           callEnv.define(params.get(i), evaluate(args.get(i), env));
-        }
 
         try {
           executeBlock(pr.decl().body(), callEnv);
         } catch (ReturnSignal rs) {
-          if (rs.value != null) {
-            throw new RuntimeException("Un procedimiento no puede retornar un valor");
-            // Nota: return; es valido, sirve para salir anticipadamente
-          }
+          if (rs.value != null)
+            throw new RuntimeException(
+                String.format("[%s:%d] Error: El procedimiento '%s' no puede retornar un valor",
+                    currentFile, pc.line(), pc.callee()));
         }
         yield null;
       }
@@ -552,24 +532,31 @@ public class Interpreter {
       case AST.NamespaceCall nc -> {
         Module mod = modules.get(nc.namespace());
         if (mod == null)
-          throw new RuntimeException("Módulo no encontrado: '" + nc.namespace() + "'");
+          throw new RuntimeException(
+              String.format("[%s] Error: Módulo no encontrado: '%s'", currentFile, nc.namespace()));
 
         Callable callable = mod.callables().get(nc.member());
         if (callable == null)
-          throw new RuntimeException("'" + nc.member() + "' no existe en módulo '" + nc.namespace() + "'");
+          throw new RuntimeException(
+              String.format("[%s] Error: '%s' no existe en módulo '%s'",
+                  currentFile, nc.member(), nc.namespace()));
 
         List<Object> evaluatedArgs = new ArrayList<>();
         for (AST.Node arg : nc.args())
           evaluatedArgs.add(evaluate(arg, env));
 
         Module previous = currentModule;
-        currentModule = mod; // ← setear contexto del módulo
+        currentModule = mod;
+        String previousFile = currentFile;
+        currentFile = nc.namespace() + ".ptl";
 
         try {
           if (callable instanceof Function fn) {
             List<String> params = fn.decl().params();
             if (params.size() != evaluatedArgs.size())
-              throw new RuntimeException("'" + nc.member() + "' espera " + params.size() + " argumento(s)");
+              throw new RuntimeException(
+                  String.format("[%s] Error: '%s' espera %d argumento(s), recibió %d",
+                      currentFile, nc.member(), params.size(), evaluatedArgs.size()));
 
             Environment callEnv = new Environment(fn.closure());
             for (int i = 0; i < params.size(); i++)
@@ -585,7 +572,9 @@ public class Interpreter {
           } else if (callable instanceof Procedure pr) {
             List<String> params = pr.decl().params();
             if (params.size() != evaluatedArgs.size())
-              throw new RuntimeException("'" + nc.member() + "' espera " + params.size() + " argumento(s)");
+              throw new RuntimeException(
+                  String.format("[%s] Error: '%s' espera %d argumento(s), recibió %d",
+                      currentFile, nc.member(), params.size(), evaluatedArgs.size()));
 
             Environment callEnv = new Environment(pr.closure());
             for (int i = 0; i < params.size(); i++)
@@ -595,25 +584,31 @@ public class Interpreter {
               executeBlock(pr.decl().body(), callEnv);
             } catch (ReturnSignal rs) {
               if (rs.value != null)
-                throw new RuntimeException("Un procedimiento no puede retornar un valor");
+                throw new RuntimeException(
+                    String.format("[%s] Error: El procedimiento '%s' no puede retornar un valor",
+                        currentFile, nc.member()));
             }
             yield null;
           }
-          throw new RuntimeException("Callable desconocido en módulo '" + nc.namespace() + "'");
+          throw new RuntimeException(
+              String.format("[%s] Error: Callable desconocido en módulo '%s'",
+                  currentFile, nc.namespace()));
         } finally {
-          currentModule = previous; // ← siempre restaurar, incluso si hay excepción
+          currentModule = previous;
+          currentFile = previousFile;
         }
       }
+
       case AST.NamespaceVar nv -> {
         Module mod = modules.get(nv.namespace());
         if (mod == null)
-          throw new RuntimeException("Módulo no encontrado: '" + nv.namespace() + "'");
+          throw new RuntimeException(
+              String.format("[%s] Error: Módulo no encontrado: '%s'", currentFile, nv.namespace()));
         yield mod.env().get(nv.member());
       }
 
       default -> execute(node, env);
     };
-
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

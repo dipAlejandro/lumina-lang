@@ -45,8 +45,8 @@ public record MapAssign(Node object, Node key, Node value) implements Node {}
 public record Binary(Node left, String op, Node right) implements Node {}
 public record Unary(String op, Node operand) implements Node {}
 public record Ternary(Node condition, Node consequence, Node alternative) implements Node {}
-public record FunCall(String callee, List<Node> args) implements Node {}
-public record ProcCall(String callee, List<Node> args) implements Node {}
+public record FunCall(String callee, List<Node> args, int line) implements Node {}
+public record ProcCall(String callee, List<Node> args, int line) implements Node {}
 public record NamespaceCall(String namespace, String member, List<Node> args) implements Node {}
 public record NamespaceVar(String namespace, String member) implements Node {}
 public record MethodCall(Node object, String method, List<Node> args) implements Node {}
