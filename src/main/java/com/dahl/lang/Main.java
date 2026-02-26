@@ -1,4 +1,4 @@
-package lang;
+package com.dahl.lang;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,11 +16,10 @@ public class Main {
         try {
             Path sourcePath = Path.of(args[0]);
             String code = Files.readString(sourcePath);
-            
             // 1. Lexer
             Lexer lexer = new Lexer(code);
             List<Lexer.Token> tokens = lexer.tokenize();
-
+            
             // 2. Parser
             Parser parser = new Parser(tokens);
             AST.Program program = parser.parse();

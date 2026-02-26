@@ -1,0 +1,23 @@
+export const PI = 3.141592653589793;
+export const E  = 2.718281828459045;
+export const TAU = 6.283185307179586;
+
+export fun clamp(x, min, max) {
+    return x < min ? min : x > max ? max : x;
+}
+
+export fun lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+export fun hypot(a, b) {
+    return sqrt(a * a + b * b);
+}
+
+export fun deg_to_rad(deg) {
+    return deg * PI / 180;
+}
+
+export fun rad_to_deg(rad) {
+    return rad * 180 / PI;
+}
