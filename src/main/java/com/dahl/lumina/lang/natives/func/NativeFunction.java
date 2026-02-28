@@ -1,4 +1,4 @@
-package com.dahl.lang.natives.func;
+package com.dahl.lumina.lang.natives.func;
 
 import java.util.HashMap;
 import java.util.List;
@@ -7,7 +7,8 @@ import java.util.Map;
 /**
  * NativeFunction
  */
-public class NativeFunction {
+public sealed class NativeFunction
+    permits NativeExceptionFunction, NativeMathFunction, NativeIOFunction, NativeTypeFunction {
 
   @FunctionalInterface
   public interface NativeImpl {

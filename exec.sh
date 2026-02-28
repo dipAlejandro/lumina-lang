@@ -1,3 +1,3 @@
 #!/bin/bash
 
-java -cp out com.dahl.lang.Main $1
+java -jar interpreter.jar $1

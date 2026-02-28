@@ -1,15 +1,15 @@
-package com.dahl.lang;
+package com.dahl.lumina.lang;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.dahl.lang.AST;
-import com.dahl.lang.Lexer.Token;
+import com.dahl.lumina.lang.AST;
+import com.dahl.lumina.lang.Lexer.Token;
 
-import com.dahl.lang.Lexer.TokenType;
-import static com.dahl.lang.Lexer.TokenType.*;
+import com.dahl.lumina.lang.Lexer.TokenType;
+import static com.dahl.lumina.lang.Lexer.TokenType.*;
 
 /**
  * Parser

@@ -1,0 +1,23 @@
+export const float PI = 3.141592653589793;
+export const float E  = 2.718281828459045;
+export const float TAU = 6.283185307179586;
+
+export fun float clamp(x, min, max) {
+    return x < min ? min : x > max ? max : x;
+}
+
+export fun float lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+export fun float hypot(a, b) {
+    return sqrt(a * a + b * b);
+}
+
+export fun float deg_to_rad(deg) {
+    return deg * PI / 180;
+}
+
+export fun float rad_to_deg(rad) {
+    return rad * 180 / PI;
+}
