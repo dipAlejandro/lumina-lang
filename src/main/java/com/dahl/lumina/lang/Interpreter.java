@@ -318,10 +318,13 @@ public class Interpreter {
         Object target = evaluate(pa.object(), env);
         yield switch (pa.property()) {
           case "len" -> {
-            if (!(target instanceof List<?> list))
-              throw new RuntimeException(
-                  String.format("[%s] Error: 'len' solo existe en arrays", currentFile));
-            yield (double) list.size();
+            if (target instanceof List<?> list)
+              yield (double) list.size();
+            if (target instanceof String s)
+              yield (double) s.length();
+
+            throw new RuntimeException(
+                String.format("[%s] Error: 'len' no aplicable a este tipo", currentFile));
           }
           case "size" -> {
             if (!(target instanceof Map<?, ?> map))
@@ -336,26 +339,94 @@ public class Interpreter {
 
       case AST.MethodCall mc -> {
         Object target = evaluate(mc.object(), env);
+        // strings
+        if (target instanceof String str) {
+          yield switch (mc.method()) {
+            case "upper" -> {
+              if (!mc.args().isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: str.upper() no espera argumentos, recibió %d", currentFile,
+                        mc.args().size()));
+
+              yield str.toUpperCase();
+            }
+
+            case "lower" -> {
+              if (!mc.args().isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: str.lower() no espera argumentos", currentFile));
+
+              yield str.toLowerCase();
+            }
+
+            case "contains" -> {
+              if (mc.args().size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: str.contains(str) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
+
+              String sub = stringify(evaluate(mc.args().get(0), env));
+              yield str.contains(sub);
+            }
+
+            case "replace" -> {
+              if (mc.args().size() != 2)
+                throw new RuntimeException(
+                    String.format("[%s] Error: str.replace(old, new) espera 2 argumentos, recibió %d", currentFile,
+                        mc.args().size()));
+
+              String old = stringify(evaluate(mc.args().get(0), env));
+              String neo = stringify(evaluate(mc.args().get(1), env));
+              String result = str.replace(old, neo);
+
+              yield result;
+            }
+
+            case "split" -> {
+
+              if (mc.args().size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: str.split(sep) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
+
+              String sep = stringify(evaluate(mc.args().get(0), env));
+              String[] parts = str.split(sep, -1);
+              List<Object> result = new ArrayList<>();
+              for (String part : parts)
+                result.add(part);
+              yield result;
+            }
+
+            default -> throw new RuntimeException(
+                String.format("[%s] Error: Método de string desconocido: '%s'", currentFile, mc.method()));
+          };
+        }
 
         if (target instanceof List list) {
           yield switch (mc.method()) {
             case "push" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: push() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: array.push(val) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               list.add(evaluate(mc.args().get(0), env));
               yield null;
             }
             case "pop" -> {
               if (list.isEmpty())
                 throw new RuntimeException(
-                    String.format("[%s] Error: pop() sobre array vacío", currentFile));
+                    String.format("[%s] Error: array.pop() sobre array vacío", currentFile));
+              if (mc.args().size() != 0)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.pop() no espera argumento, recibió %d", currentFile,
+                        mc.args().size()));
               yield list.remove(list.size() - 1);
             }
             case "contains" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: contains() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: array.contains(val) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               Object target2 = evaluate(mc.args().get(0), env);
               yield list.stream().anyMatch(e -> isEqual(e, target2));
             }
@@ -369,7 +440,8 @@ public class Interpreter {
             case "get" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: get() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: map.get(key) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               String key = stringify(evaluate(mc.args().get(0), env));
               if (!map.containsKey(key))
                 throw new RuntimeException(
@@ -379,7 +451,8 @@ public class Interpreter {
             case "put" -> {
               if (mc.args().size() != 2)
                 throw new RuntimeException(
-                    String.format("[%s] Error: put() espera 2 argumentos", currentFile));
+                    String.format("[%s] Error: map.put(k, v) espera 2 argumentos, recibió %d", currentFile,
+                        mc.args().size()));
               String key = stringify(evaluate(mc.args().get(0), env));
               Object value = evaluate(mc.args().get(1), env);
               yield map.put(key, value);
@@ -387,40 +460,46 @@ public class Interpreter {
             case "remove" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: remove() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: map.remove(key) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               String key = stringify(evaluate(mc.args().get(0), env));
               yield map.remove(key);
             }
             case "contains_key" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: contains_key() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: map.contains_key(key) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               String key = stringify(evaluate(mc.args().get(0), env));
               yield map.containsKey(key);
             }
             case "contains_val" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
-                    String.format("[%s] Error: contains_val() espera 1 argumento", currentFile));
+                    String.format("[%s] Error: map.contains_val(value) espera 1 argumento, recibió %d", currentFile,
+                        mc.args().size()));
               Object val = evaluate(mc.args().get(0), env);
               yield map.containsValue(val);
             }
             case "keys" -> {
               if (!mc.args().isEmpty())
                 throw new RuntimeException(
-                    String.format("[%s] Error: keys() no espera argumentos", currentFile));
+                    String.format("[%s] Error: map.keys() no espera argumentos, recibió %d", currentFile,
+                        mc.args().size()));
               yield new ArrayList<>(map.keySet());
             }
             case "values" -> {
               if (!mc.args().isEmpty())
                 throw new RuntimeException(
-                    String.format("[%s] Error: values() no espera argumentos", currentFile));
+                    String.format("[%s] Error: map.values() no espera argumentos, recibió %d", currentFile,
+                        mc.args().size()));
               yield new ArrayList<>(map.values());
             }
             case "clear" -> {
               if (!mc.args().isEmpty())
                 throw new RuntimeException(
-                    String.format("[%s] Error: clear() no espera argumentos", currentFile));
+                    String.format("[%s] Error: map.clear() no espera argumentos, recibió %d", currentFile,
+                        mc.args().size()));
               map.clear();
               yield null;
             }
