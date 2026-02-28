@@ -1,0 +1,2 @@
+Main-Class: com.dahl.lumina.lang.Lumina
+

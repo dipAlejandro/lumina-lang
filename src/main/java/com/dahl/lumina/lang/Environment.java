@@ -1,4 +1,4 @@
-package com.dahl.lang;
+package com.dahl.lumina.lang;
 
 import java.util.HashMap;
 import java.util.HashSet;

@@ -1,8 +1,8 @@
-package com.dahl.lang.natives.func;
+package com.dahl.lumina.lang.natives.func;
 
 import java.util.Scanner;
 
-import com.dahl.lang.natives.func.NativeFunction;
+import com.dahl.lumina.lang.natives.func.NativeFunction;
 
 /**
  * NativeIOFunction
@@ -18,7 +18,7 @@ public final class NativeIOFunction extends NativeFunction {
 
       System.out.print(args.get(0));
       String input = sc.nextLine();
-      sc.close();
+      
 
       return input;
     });

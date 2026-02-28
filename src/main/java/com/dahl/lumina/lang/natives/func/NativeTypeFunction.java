@@ -1,6 +1,6 @@
-package com.dahl.lang.natives.func;
+package com.dahl.lumina.lang.natives.func;
 
-import com.dahl.lang.natives.func.NativeFunction;
+import com.dahl.lumina.lang.natives.func.NativeFunction;
 
 /**
  * NativeTypeFunction

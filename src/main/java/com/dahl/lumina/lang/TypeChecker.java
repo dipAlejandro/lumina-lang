@@ -1,4 +1,4 @@
-package com.dahl.lang;
+package com.dahl.lumina.lang;
 
 import java.util.List;
 import java.util.Map;

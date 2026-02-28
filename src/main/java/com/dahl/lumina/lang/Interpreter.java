@@ -1,4 +1,4 @@
-package com.dahl.lang;
+package com.dahl.lumina.lang;
 
 import java.io.IOException;
 import java.lang.annotation.Target;
@@ -11,10 +11,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.dahl.lang.AST;
-import com.dahl.lang.Environment;
-import com.dahl.lang.TypeChecker;
-import com.dahl.lang.natives.func.NativeFunction;
+import com.dahl.lumina.lang.AST;
+import com.dahl.lumina.lang.Environment;
+import com.dahl.lumina.lang.TypeChecker;
+import com.dahl.lumina.lang.natives.func.NativeFunction;
 
 public class Interpreter {
   static class ReturnSignal extends RuntimeException {
@@ -50,12 +50,13 @@ public class Interpreter {
 
   // Entry point
   public void run(AST.Program program) {
+    final String basePackage = "com.dahl.lumina.lang.natives";
     try {
-      Class.forName("com.dahl.lang.natives.func.NativeExceptionFunction");
-      Class.forName("com.dahl.lang.natives.func.NativeMathFunction");
-      Class.forName("com.dahl.lang.natives.func.NativeIOFunction");
-      Class.forName("com.dahl.lang.natives.func.NativeTypeFunction");
-      
+      Class.forName(basePackage + ".func.NativeExceptionFunction");
+      Class.forName(basePackage + "func.NativeMathFunction");
+      Class.forName(basePackage + ".func.NativeIOFunction");
+      Class.forName(basePackage + ".func.NativeTypeFunction");
+
     } catch (ClassNotFoundException e) {
       throw new RuntimeException("No se pudo cargar herencia de NativeFunction", e);
     }
@@ -81,8 +82,8 @@ public class Interpreter {
         AST.Program program;
         String previousFile = currentFile;
         try {
-          src = Files.readString(Path.of(i.path() + ".ptl"));
-          currentFile = i.path() + ".ptl";
+          src = Files.readString(Path.of(i.path() + ".lum"));
+          currentFile = i.path() + ".lum";
           program = new Parser(new Lexer(src).tokenize()).parse();
         } catch (IOException e) {
           throw new RuntimeException(
