@@ -274,7 +274,7 @@ public class Interpreter {
       case AST.SetLiteral sl -> {
         Set<Object> set = new LinkedHashSet<>();
         for (AST.Node el : sl.elements())
-          set.add(el);
+          set.add(evaluate(el, env));
 
         yield set;
       }
@@ -954,6 +954,7 @@ public class Interpreter {
       // Mostrar enteros sin decimales
       if (d == Math.floor(d) && !Double.isInfinite(d))
         return String.valueOf(d.longValue());
+
       return d.toString();
     }
     return value.toString();
