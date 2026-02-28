@@ -148,18 +148,6 @@ public class Interpreter {
         yield null;
       }
 
-      /*
-       * case AST.Assign a -> {
-       * Object val = evaluate(a.value(), env);
-       * // Verificar tipo declarado si existe
-       * String declaredType = env.getType(a.name());
-       * if (declaredType != null && !declaredType.equals("any"))
-       * TypeChecker.check(declaredType, val, a.name(), currentFile, 0);
-       * env.set(a.name(), val);
-       * yield val;
-       * }
-       */
-
       case AST.If i -> {
         if (isTruthy(evaluate(i.condition(), env))) {
           executeBlock(i.thenBranch(), new Environment(env));
@@ -332,6 +320,7 @@ public class Interpreter {
         Object target = evaluate(mc.object(), env);
         String method = mc.method();
         var args = mc.args();
+
         // strings
         if (target instanceof String str) {
           yield switch (method) {

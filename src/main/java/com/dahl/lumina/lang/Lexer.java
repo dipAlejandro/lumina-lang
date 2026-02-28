@@ -13,7 +13,7 @@ public class Lexer {
     // Literals
     NUMBER, STRING, BOOLEAN, NULL,
     // Types
-    INT, FLOAT, STR, BOOL, ARRAY, MAP, SET,ANY,
+    INT, FLOAT, STR, BOOL, ARRAY, MAP, SET, ANY,
     // Identifiers & keywords
     IDENTIFIER,
     VAR, CONST, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM, CONTINUE, BREAK,
@@ -119,6 +119,7 @@ public class Lexer {
       case "array" -> TokenType.ARRAY;
       case "map" -> TokenType.MAP;
       case "any" -> TokenType.ANY;
+      case "set" -> TokenType.SET;
       case "proc" -> TokenType.PROC;
       case "return" -> TokenType.RETURN;
       case "if" -> TokenType.IF;
