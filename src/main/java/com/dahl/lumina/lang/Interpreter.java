@@ -10,8 +10,10 @@ import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.dahl.lumina.lang.AST;
 import com.dahl.lumina.lang.Environment;
@@ -281,37 +283,19 @@ public class Interpreter {
         yield map;
       }
 
+      case AST.SetLiteral sl -> {
+        Set<Object> set = new LinkedHashSet<>();
+        for (AST.Node el : sl.elements())
+          set.add(el);
+
+        yield set;
+      }
+
       case AST.ArrayLiteral al -> {
         List<Object> elements = new ArrayList<>();
         for (AST.Node el : al.elements())
           elements.add(evaluate(el, env));
         yield elements;
-      }
-
-      case AST.ArrayAccess aa -> {
-        Object target = evaluate(aa.array(), env);
-        if (!(target instanceof List<?> list))
-          throw new RuntimeException(
-              String.format("[%s] Error: Solo se puede indexar un array", currentFile));
-        int idx = (int) toNumber(evaluate(aa.index(), env));
-        if (idx < 0 || idx >= list.size())
-          throw new RuntimeException(
-              String.format("[%s] Error: Índice fuera de rango: %d (tamaño: %d)", currentFile, idx, list.size()));
-        yield list.get(idx);
-      }
-
-      case AST.ArrayAssign aa -> {
-        Object target = evaluate(aa.array(), env);
-        if (!(target instanceof List list))
-          throw new RuntimeException(
-              String.format("[%s] Error: Solo se puede indexar un array", currentFile));
-        int idx = (int) toNumber(evaluate(aa.index(), env));
-        if (idx < 0 || idx >= list.size())
-          throw new RuntimeException(
-              String.format("[%s] Error: Índice fuera de rango: %d (tamaño: %d)", currentFile, idx, list.size()));
-        Object val = evaluate(aa.value(), env);
-        list.set(idx, val);
-        yield val;
       }
 
       case AST.PropertyAccess pa -> {
@@ -324,13 +308,20 @@ public class Interpreter {
               yield (double) s.length();
 
             throw new RuntimeException(
-                String.format("[%s] Error: 'len' no aplicable a este tipo", currentFile));
+                String.format("[%s] Error: 'len' no aplicable a este tipo: '%s'", currentFile,
+                    target.getClass().getName()));
           }
           case "size" -> {
-            if (!(target instanceof Map<?, ?> map))
-              throw new RuntimeException(
-                  String.format("[%s] Error: 'size' solo existe en mapas", currentFile));
-            yield (double) map.size();
+            if (target instanceof Map<?, ?> map)
+              yield (double) map.size();
+
+            if (target instanceof Set<?> set)
+              yield (double) set.size();
+
+            throw new RuntimeException(
+                String.format("[%s] Error: 'size' no aplicada a este tipo: '%s'", currentFile,
+                    target.getClass().getName()));
+
           }
           default -> throw new RuntimeException(
               String.format("[%s] Error: Propiedad '%s' desconocida", currentFile, pa.property()));
@@ -339,44 +330,47 @@ public class Interpreter {
 
       case AST.MethodCall mc -> {
         Object target = evaluate(mc.object(), env);
+        String method = mc.method();
+        var args = mc.args();
         // strings
         if (target instanceof String str) {
-          yield switch (mc.method()) {
+          yield switch (method) {
             case "upper" -> {
-              if (!mc.args().isEmpty())
+              if (!args.isEmpty())
                 throw new RuntimeException(
                     String.format("[%s] Error: str.upper() no espera argumentos, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
 
               yield str.toUpperCase();
             }
 
             case "lower" -> {
-              if (!mc.args().isEmpty())
+              if (!args.isEmpty())
                 throw new RuntimeException(
-                    String.format("[%s] Error: str.lower() no espera argumentos", currentFile));
+                    String.format("[%s] Error: str.lower() no espera argumentos, recibió %d", currentFile,
+                        args.size()));
 
               yield str.toLowerCase();
             }
 
             case "contains" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: str.contains(str) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
 
-              String sub = stringify(evaluate(mc.args().get(0), env));
+              String sub = stringify(evaluate(args.get(0), env));
               yield str.contains(sub);
             }
 
             case "replace" -> {
-              if (mc.args().size() != 2)
+              if (args.size() != 2)
                 throw new RuntimeException(
                     String.format("[%s] Error: str.replace(old, new) espera 2 argumentos, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
 
-              String old = stringify(evaluate(mc.args().get(0), env));
-              String neo = stringify(evaluate(mc.args().get(1), env));
+              String old = stringify(evaluate(args.get(0), env));
+              String neo = stringify(evaluate(args.get(1), env));
               String result = str.replace(old, neo);
 
               yield result;
@@ -384,12 +378,12 @@ public class Interpreter {
 
             case "split" -> {
 
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: str.split(sep) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
 
-              String sep = stringify(evaluate(mc.args().get(0), env));
+              String sep = stringify(evaluate(args.get(0), env));
               String[] parts = str.split(sep, -1);
               List<Object> result = new ArrayList<>();
               for (String part : parts)
@@ -398,117 +392,229 @@ public class Interpreter {
             }
 
             default -> throw new RuntimeException(
-                String.format("[%s] Error: Método de string desconocido: '%s'", currentFile, mc.method()));
+                String.format("[%s] Error: Método de string desconocido: '%s'", currentFile, method));
           };
         }
 
+        // arrays
         if (target instanceof List list) {
-          yield switch (mc.method()) {
+          yield switch (method) {
+
+            case "get" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.get(idx) espera 1 argumento, recibió %d", currentFile,
+                        args.size()));
+
+              int idx = (int) toNumber(evaluate(args.get(0), env));
+
+              if (idx < 0 || idx >= list.size())
+                throw new RuntimeException(
+                    String.format("[%] Error: Índice fuera de rango: %d (tamaño %d)", currentFile, idx, list.size()));
+
+              yield list.get(idx);
+            }
+
             case "push" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: array.push(val) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              list.add(evaluate(mc.args().get(0), env));
+                        args.size()));
+
+              list.add(evaluate(args.get(0), env));
               yield null;
             }
+
+            case "set" -> {
+              if (args.size() != 2)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.set(idx, val) espera 2 argumentos, recibió %d", currentFile,
+                        args.size()));
+
+              int idx = (int) toNumber(evaluate(args.get(0), env));
+              if (idx < 0 || idx >= list.size())
+                throw new RuntimeException(
+                    String.format("[%] Error: Índice fuera de rango: %d (tamaño %d)", currentFile, idx, list.size()));
+
+              Object val = evaluate(args.get(1), env);
+              list.set(idx, val);
+              yield val;
+
+            }
+
             case "pop" -> {
               if (list.isEmpty())
                 throw new RuntimeException(
                     String.format("[%s] Error: array.pop() sobre array vacío", currentFile));
-              if (mc.args().size() != 0)
+              if (args.size() != 0)
                 throw new RuntimeException(
                     String.format("[%s] Error: array.pop() no espera argumento, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
+
               yield list.remove(list.size() - 1);
             }
             case "contains" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: array.contains(val) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              Object target2 = evaluate(mc.args().get(0), env);
+                        args.size()));
+
+              Object target2 = evaluate(args.get(0), env);
               yield list.stream().anyMatch(e -> isEqual(e, target2));
             }
             default -> throw new RuntimeException(
-                String.format("[%s] Error: Método de array desconocido: '%s'", currentFile, mc.method()));
+                String.format("[%s] Error: Método de array desconocido: '%s'", currentFile, method));
+          };
+        }
+
+        if (target instanceof Set set) {
+          yield switch (method) {
+
+            case "add" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.add(elem) espera un argumento, recibió %d", currentFile,
+                        args.size()));
+              set.add(evaluate(args.get(0), env));
+              yield null;
+            }
+
+            case "remove" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.remove(val) espera un argumento, recibió %d", currentFile,
+                        args.size()));
+              Object val = evaluate(args.get(0), env);
+              yield set.remove(val);
+            }
+
+            case "contains" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.contains(elem) espera un argumento, recibió %d", currentFile,
+                        args.size()));
+              Object val = evaluate(args.get(0), env);
+              yield set.contains(val);
+            }
+
+            case "to_array" -> {
+
+              if (!args.isEmpty())
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.to_array() no espera argumentos, recibió %d", currentFile,
+                        args.size()));
+              yield new ArrayList<>(set);
+            }
+            case "union" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.union(set) espera un argumento, recibió %d", currentFile,
+                        args.size()));
+
+              Object other = evaluate(args.get(0), env);
+              if (!(other instanceof Set otherSet))
+                throw new RuntimeException(
+                    String.format("[%s] Error: set.union(set) espera un argumento tipo 'set', recibió %s", currentFile,
+                        other.getClass().getName()));
+
+              Set<Object> result = new LinkedHashSet<>();
+              result.addAll(otherSet);
+
+              yield result;
+            }
+
+            default -> throw new RuntimeException(
+                String.format("[%s] Error: Método de set desconocido: '%'", currentFile, method));
           };
         }
 
         if (target instanceof Map map) {
-          yield switch (mc.method()) {
+          yield switch (method) {
             case "get" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: map.get(key) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              String key = stringify(evaluate(mc.args().get(0), env));
+                        args.size()));
+
+              String key = stringify(evaluate(args.get(0), env));
               if (!map.containsKey(key))
                 throw new RuntimeException(
                     String.format("[%s] Error: Clave no encontrada: '%s'", currentFile, key));
               yield map.get(key);
             }
             case "put" -> {
-              if (mc.args().size() != 2)
+              if (args.size() != 2)
                 throw new RuntimeException(
                     String.format("[%s] Error: map.put(k, v) espera 2 argumentos, recibió %d", currentFile,
-                        mc.args().size()));
-              String key = stringify(evaluate(mc.args().get(0), env));
-              Object value = evaluate(mc.args().get(1), env);
+                        args.size()));
+
+              String key = stringify(evaluate(args.get(0), env));
+              Object value = evaluate(args.get(1), env);
               yield map.put(key, value);
             }
             case "remove" -> {
               if (mc.args().size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: map.remove(key) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              String key = stringify(evaluate(mc.args().get(0), env));
+                        args.size()));
+
+              String key = stringify(evaluate(args.get(0), env));
               yield map.remove(key);
             }
             case "contains_key" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: map.contains_key(key) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              String key = stringify(evaluate(mc.args().get(0), env));
+                        args.size()));
+
+              String key = stringify(evaluate(args.get(0), env));
               yield map.containsKey(key);
             }
             case "contains_val" -> {
-              if (mc.args().size() != 1)
+              if (args.size() != 1)
                 throw new RuntimeException(
                     String.format("[%s] Error: map.contains_val(value) espera 1 argumento, recibió %d", currentFile,
-                        mc.args().size()));
-              Object val = evaluate(mc.args().get(0), env);
+                        args.size()));
+
+              Object val = evaluate(args.get(0), env);
               yield map.containsValue(val);
             }
             case "keys" -> {
-              if (!mc.args().isEmpty())
+              if (!args.isEmpty())
                 throw new RuntimeException(
                     String.format("[%s] Error: map.keys() no espera argumentos, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
+
               yield new ArrayList<>(map.keySet());
             }
             case "values" -> {
-              if (!mc.args().isEmpty())
+              if (!args.isEmpty())
                 throw new RuntimeException(
                     String.format("[%s] Error: map.values() no espera argumentos, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
+
               yield new ArrayList<>(map.values());
             }
             case "clear" -> {
-              if (!mc.args().isEmpty())
+              if (!args.isEmpty())
                 throw new RuntimeException(
                     String.format("[%s] Error: map.clear() no espera argumentos, recibió %d", currentFile,
-                        mc.args().size()));
+                        args.size()));
+
               map.clear();
               yield null;
             }
             default -> throw new RuntimeException(
-                String.format("[%s] Error: Método de mapa desconocido: '%s'", currentFile, mc.method()));
+                String.format("[%s] Error: Método de mapa desconocido: '%s'", currentFile, method));
           };
         }
         throw new RuntimeException(
-            String.format("[%s] Error: Método '%s' no aplicable a este tipo", currentFile, mc.method()));
+            String.format("[%s] Error: Método '%s' no aplicable a este tipo", currentFile, method));
       }
 
       case AST.Var v -> {

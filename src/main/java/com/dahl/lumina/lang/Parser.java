@@ -117,7 +117,7 @@ public class Parser {
     String name = consume(IDENTIFIER).value;
     consume(ASSIGN);
     AST.Node init = parseExpression();
-    consume(SEMICOLON);
+    matchOptional(SEMICOLON);
     return new AST.ConstDecl(type, name, init, line);
   }
 
@@ -448,46 +448,55 @@ public class Parser {
       return new AST.Literal(null);
     }
 
-    // Literal array
-    if (check(LBRACKET)) {
+    // Constructores de tipos
+    if (check(ARRAY) && peek(1).type == LPAREN) {
       advance();
+      consume(LPAREN);
       List<AST.Node> elements = new ArrayList<>();
-      if (!check(RBRACKET)) {
+      if (!check(RPAREN)) {
         elements.add(parseExpression());
         while (match(COMMA))
           elements.add(parseExpression());
       }
-      consume(RBRACKET);
+      consume(RPAREN);
       return new AST.ArrayLiteral(elements);
     }
 
-    if (check(LBRACE)) {
-      // Distinguir mapa de bloque
-      // Mapa: { "key", value }
-      // Bloque: { stmt; stmt; }
+    if (check(MAP) && peek(1).type == LPAREN) {
+      advance();
+      consume(LPAREN);
+      List<String> keys = new ArrayList<>();
+      List<AST.Node> values = new ArrayList<>();
 
-      if (peek(1).type == STRING && peek(2).type == COLON || peek(1).type == RBRACE) {
-        advance(); // consume {
-        List<String> keys = new ArrayList<>();
-        List<AST.Node> values = new ArrayList<>();
-
-        if (!check(RBRACE)) {
-          String key = consume(STRING).value;
+      if (!check(RPAREN)) {
+        String key = consume(STRING).value;
+        consume(COLON);
+        AST.Node value = parseExpression();
+        keys.add(key);
+        values.add(value);
+        while (match(COMMA)) {
+          key = consume(STRING).value;
           consume(COLON);
-          AST.Node value = parseExpression();
+          value = parseExpression();
           keys.add(key);
           values.add(value);
-          while (match(COMMA)) {
-            key = consume(STRING).value;
-            consume(COLON);
-            value = parseExpression();
-            keys.add(key);
-            values.add(value);
-          }
         }
-        consume(RBRACE);
-        return new AST.MapLiteral(keys, values);
       }
+      consume(RPAREN);
+      return new AST.MapLiteral(keys, values);
+    }
+
+    if (check(SET) && peek(1).type == LPAREN) {
+      advance();
+      consume(LPAREN);
+      List<AST.Node> elements = new ArrayList<>();
+      if (!check(RPAREN)) {
+        elements.add(parseExpression());
+        while (match(COMMA))
+          elements.add(parseExpression());
+      }
+      consume(RPAREN);
+      return new AST.SetLiteral(elements);
     }
 
     // Function call, procedure call or variable
@@ -537,14 +546,6 @@ public class Parser {
         if (procNames.contains(name))
           return new AST.ProcCall(name, args, line);
         return new AST.FunCall(name, args, line);
-      }
-
-      // Acceso por índice: arr[0]
-      if (check(LBRACKET)) {
-        advance();
-        AST.Node index = parseExpression();
-        consume(RBRACKET);
-        return new AST.ArrayAccess(new AST.Var(name), index);
       }
 
       return new AST.Var(name);
@@ -613,7 +614,7 @@ public class Parser {
 
   private boolean checkType() {
     return check(INT) || check(FLOAT) || check(STR) ||
-        check(BOOL) || check(ARRAY) || check(MAP) || check(ANY);
+        check(BOOL) || check(ARRAY) || check(MAP) || check(SET) || check(ANY);
   }
 
   private String consumeType() {

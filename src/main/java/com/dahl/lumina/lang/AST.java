@@ -37,11 +37,10 @@ public record ExprStmt(Node expr) implements Node {}
 public record ArrowExpr(Node condExpr, ProcCall procCall) implements Node {};
 
 // Data structs
-public record  ArrayLiteral(List<Node> elements) implements Node {}
-public record ArrayAccess(Node array, Node index) implements Node {}
-public record ArrayAssign(Node array, Node index, Node value) implements Node {}
+public record ArrayLiteral(List<Node> elements) implements Node {}
 public record MapLiteral(List<String> keys, List<Node> values) implements Node {}
 public record MapAssign(Node object, Node key, Node value) implements Node {}
+public record SetLiteral(List<Node> elements) implements Node {}
 
 // Expressions
 public record Binary(Node left, String op, Node right) implements Node {}
