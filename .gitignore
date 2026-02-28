@@ -1,3 +1,4 @@
 /out
 *.jar
 !std/
+test_env/

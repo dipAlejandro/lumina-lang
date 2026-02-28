@@ -1,7 +1,9 @@
 package com.dahl.lumina.lang;
 
+import java.beans.BeanDescriptor;
 import java.io.IOException;
 import java.lang.annotation.Target;
+import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DecimalFormatSymbols;
@@ -24,6 +26,18 @@ public class Interpreter {
     ReturnSignal(Object value) {
       super(null, null, true, false);
       this.value = value;
+    }
+  }
+
+  static class BreakSignal extends RuntimeException {
+    BreakSignal() {
+      super(null, null, true, false);
+    }
+  }
+
+  static class ContinueSignal extends RuntimeException {
+    ContinueSignal() {
+      super(null, null, true, false);
     }
   }
 
@@ -162,7 +176,13 @@ public class Interpreter {
 
       case AST.While w -> {
         while (isTruthy(evaluate(w.condition(), env))) {
-          executeBlock(w.body(), new Environment(env));
+          try {
+            executeBlock(w.body(), new Environment(env));
+          } catch (BreakSignal bs) {
+            break;
+          } catch (ContinueSignal cs) {
+            continue;
+          }
         }
         yield null;
       }
@@ -178,7 +198,13 @@ public class Interpreter {
         Environment forEnv = new Environment(env);
         execute(f.init(), forEnv);
         while (isTruthy(evaluate(f.condition(), forEnv))) {
-          executeBlock(f.body(), new Environment(forEnv));
+          try {
+            executeBlock(f.body(), new Environment(forEnv));
+          } catch (BreakSignal bs) {
+            break;
+          } catch (ContinueSignal sc) {
+          }
+
           evaluate(f.step(), forEnv);
         }
         yield null;
@@ -198,6 +224,9 @@ public class Interpreter {
         Object val = r.value() != null ? evaluate(r.value(), env) : null;
         throw new ReturnSignal(val);
       }
+
+      case AST.Break b -> throw new BreakSignal();
+      case AST.Continue c -> throw new ContinueSignal();
 
       case AST.Print p -> {
         Object val = evaluate(p.value(), env);

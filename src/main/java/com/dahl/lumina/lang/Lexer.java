@@ -13,10 +13,10 @@ public class Lexer {
     // Literals
     NUMBER, STRING, BOOLEAN, NULL,
     // Types
-    INT, FLOAT, STR, BOOL, ARRAY, MAP, ANY,
+    INT, FLOAT, STR, BOOL, ARRAY, MAP, SET,ANY,
     // Identifiers & keywords
     IDENTIFIER,
-    VAR, CONST, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM,
+    VAR, CONST, FUN, PROC, RETURN, IF, ELSE, WHILE, FOR, PRINT, TRUE, FALSE, IMPORT, EXPORT, FROM, CONTINUE, BREAK,
     // Arithmetic operators
     PLUS, MINUS, STAR, SLASH, PERCENT,
     PLUS_ASSIGN, MINUS_ASSIGN, STAR_ASSIGN, SLASH_ASSIGN,
@@ -132,6 +132,8 @@ public class Lexer {
       case "import" -> TokenType.IMPORT;
       case "export" -> TokenType.EXPORT;
       case "from" -> TokenType.FROM;
+      case "break" -> TokenType.BREAK;
+      case "continue" -> TokenType.CONTINUE;
       default -> TokenType.IDENTIFIER;
     };
     tokens.add(new Token(type, word, line));

@@ -21,6 +21,8 @@ public record While(Node condition, Block body) implements Node {}
 public record WhileArrow(Node condition, Node body) implements Node {}
 public record For(VarDecl init, Node condition, Node step, Block body) implements Node {}
 public record ForArrow(VarDecl init, Node condition, Node step, Node body) implements Node {}
+public record Break() implements Node {}
+public record Continue() implements Node {}
 public record ProcDecl(String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
 public record FunDecl(String returnType, String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
 public record Return(Node value) implements Node {}

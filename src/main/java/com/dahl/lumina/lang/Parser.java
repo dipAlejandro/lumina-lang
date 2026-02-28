@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import com.dahl.lumina.lang.AST;
 import com.dahl.lumina.lang.Lexer.Token;
@@ -82,6 +83,10 @@ public class Parser {
       return parseImport();
     if (check(EXPORT))
       return parseExport();
+    if (check(BREAK))
+      return parseBreak();
+    if (check(CONTINUE))
+      return parseContinue();
     return parseExprStatement();
   }
 
@@ -229,6 +234,18 @@ public class Parser {
     AST.Node value = check(SEMICOLON) || check(RBRACE) ? null : parseExpression();
     matchOptional(SEMICOLON);
     return new AST.Return(value);
+  }
+
+  private AST.Break parseBreak() {
+    consume(BREAK);
+    matchOptional(SEMICOLON);
+    return new AST.Break();
+  }
+
+  private AST.Continue parseContinue() {
+    consume(CONTINUE);
+    matchOptional(SEMICOLON);
+    return new AST.Continue();
   }
 
   private AST.Print parsePrint() {
