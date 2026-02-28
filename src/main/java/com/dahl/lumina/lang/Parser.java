@@ -182,9 +182,13 @@ public class Parser {
 
     // If con bloque
     AST.Block thenBranch = parseBlock();
-    AST.Block elseBranch = null;
+    AST.Node elseBranch = null;
     if (match(ELSE)) {
-      elseBranch = parseBlock();
+      if (check(IF)) {
+        elseBranch = parseIf();
+      } else {
+        elseBranch = parseBlock();
+      }
     }
     return new AST.If(condition, thenBranch, elseBranch);
   }

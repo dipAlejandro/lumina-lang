@@ -162,7 +162,11 @@ public class Interpreter {
         if (isTruthy(evaluate(i.condition(), env))) {
           executeBlock(i.thenBranch(), new Environment(env));
         } else if (i.elseBranch() != null) {
-          executeBlock(i.elseBranch(), new Environment(env));
+          if (i.elseBranch() instanceof AST.Block b) {
+            executeBlock(b, new Environment(env));
+          } else {
+            execute(i.elseBranch(), env); // ejecuta if anidado
+          }
         }
         yield null;
       }

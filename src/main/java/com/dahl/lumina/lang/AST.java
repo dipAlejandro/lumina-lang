@@ -15,7 +15,7 @@ public record VarDecl(String type, String name, Node initializer, int line) impl
 public record ConstDecl(String type, String name, Node initializer, int line) implements Node {}
 public record Assign(String name, Node value) implements Node{}
 public record CompoundAssign(String name, String op, Node value) implements Node {}
-public record If(Node condition, Block thenBranch, Block elseBranch) implements Node {}
+public record If(Node condition, Block thenBranch, Node elseBranch) implements Node {}
 public record IfArrow(Node condition, Node body) implements Node {}
 public record While(Node condition, Block body) implements Node {}
 public record WhileArrow(Node condition, Node body) implements Node {}
