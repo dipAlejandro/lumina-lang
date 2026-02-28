@@ -53,12 +53,12 @@ public class Interpreter {
     final String basePackage = "com.dahl.lumina.lang.natives";
     try {
       Class.forName(basePackage + ".func.NativeExceptionFunction");
-      Class.forName(basePackage + "func.NativeMathFunction");
+      Class.forName(basePackage + ".func.NativeMathFunction");
       Class.forName(basePackage + ".func.NativeIOFunction");
       Class.forName(basePackage + ".func.NativeTypeFunction");
 
     } catch (ClassNotFoundException e) {
-      throw new RuntimeException("No se pudo cargar herencia de NativeFunction", e);
+      throw new RuntimeException("No se pudo cargar función nativa", e);
     }
     // Primer paso: registrar funciones
     for (AST.Node stmt : program.statements()) {
