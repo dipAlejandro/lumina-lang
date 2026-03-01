@@ -415,10 +415,10 @@ public class Interpreter {
               yield null;
             }
 
-            case "set" -> {
+            case "replace" -> {
               if (args.size() != 2)
                 throw new RuntimeException(
-                    String.format("[%s] Error: array.set(idx, val) espera 2 argumentos, recibió %d", currentFile,
+                    String.format("[%s] Error: array.replace(idx, val) espera 2 argumentos, recibió %d", currentFile,
                         args.size()));
 
               int idx = (int) toNumber(evaluate(args.get(0), env));
@@ -511,7 +511,7 @@ public class Interpreter {
                     String.format("[%s] Error: set.union(set) espera un argumento tipo 'set', recibió %s", currentFile,
                         other.getClass().getName()));
 
-              Set<Object> result = new LinkedHashSet<>();
+              Set<Object> result = new LinkedHashSet<>(set);
               result.addAll(otherSet);
 
               yield result;
