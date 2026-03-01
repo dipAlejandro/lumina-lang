@@ -499,6 +499,11 @@ public class Parser {
       return new AST.SetLiteral(elements);
     }
 
+    // LAMBDAS
+    if (check(LPAREN) && isLambda()) {
+      return parseLambda();
+    }
+
     // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
@@ -561,6 +566,32 @@ public class Parser {
     throw new RuntimeException(
         "Se esperaba una expresión en línea " + current().line + " pero se encontró: '" + current().value + "'");
   }
+
+  private AST.Lambda parseLambda() {
+    consume(LPAREN);
+
+    List<String> params = new ArrayList<>();
+
+    if (!check(RPAREN)) {
+      params.add(consume(IDENTIFIER).value);
+
+      while (match(COMMA))
+        params.add(consume(IDENTIFIER).value);
+    }
+
+    consume(RPAREN);
+    consume(ARROW);
+
+    AST.Node body;
+    if (check(LBRACE)) {
+      body = parseBlock(); // Bloque: (a, b) { return a + b; }
+    } else {
+      body = parseExpression(); // Expresion simple: (a, b) -> a + b
+    }
+
+    return new AST.Lambda(params, body);
+  }
+
   // ── Token utilities ───────────────────────────────────────────────────────
 
   private Token consume(TokenType type) {
@@ -623,5 +654,25 @@ public class Parser {
           "Se esperaba un tipo en línea " + current().line +
               " pero se encontró '" + current().value + "'");
     return advance().value;
+  }
+
+  private boolean isLambda() {
+    // Sintaxis:
+    // (a, b) -> o (a, b) { ... }
+
+    // Buscar RPAREN seguido de ARROW o BRACE
+    int i = pos + 1; // Saltar LPAREN
+    while (i < tokens.size()) {
+      TokenType t = tokens.get(i).type;
+      if (t == IDENTIFIER || t == COMMA) {
+        i++;
+      } else if (t == RPAREN) {
+        // despues de RPAREN debe venir ARROW
+        return i + 1 < tokens.size() && tokens.get(i + 1).type == ARROW;
+      } else {
+        return false;
+      }
+    }
+    return false;
   }
 }

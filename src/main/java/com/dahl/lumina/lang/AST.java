@@ -55,4 +55,5 @@ public record PropertyAccess(Node object, String property) implements Node {}
 public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
 public record Increment (String name, String op, boolean prefix) implements Node {}
+public record Lambda(List<String> params, Node body) implements Node {}
 }

@@ -1,5 +1,6 @@
 package com.dahl.lumina.lang;
 
+import java.awt.image.renderable.ParameterBlock;
 import java.beans.BeanDescriptor;
 import java.io.IOException;
 import java.lang.annotation.Target;
@@ -52,6 +53,9 @@ public class Interpreter {
 
   record Procedure(AST.ProcDecl decl, Environment closure) implements Callable {
   }
+
+  record LambdaValue(AST.Lambda decl, Environment closure) {
+  };
 
   record Module(Environment env, Map<String, Callable> callables) {
   }
@@ -736,6 +740,39 @@ public class Interpreter {
           yield NativeFunction.call(fc.callee(), evaluatedArgs, fc.line(), currentFile);
         }
 
+        // Lambda almacenada en variables
+        Object maybeCallable = null;
+        try {
+          maybeCallable = env.get(fc.callee());
+        } catch (RuntimeException ignored) {
+        }
+
+        if (maybeCallable instanceof LambdaValue lv) {
+          List<String> params = lv.decl().params();
+          List<AST.Node> args = fc.args();
+
+          if (params.size() != args.size())
+            throw new RuntimeException(
+                String.format("[%s:%d] Error: lambda esoera %d argumento(s), recivió %d", currentFile, fc.line(),
+                    params.size(), args.size()));
+
+          Environment callEnv = new Environment(lv.closure());
+          for (int i = 0; i < params.size(); i++)
+            callEnv.define(params.get(i), evaluate(args.get(0), env));
+
+          try {
+            if (lv.decl().body() instanceof AST.Block block) {
+              executeBlock(block, callEnv);
+              yield null;
+            } else {
+              yield evaluate(lv.decl().body(), callEnv);
+            }
+
+          } catch (ReturnSignal rs) {
+            yield rs.value;
+          }
+        }
+
         Function fn = resolveFunction(fc.callee());
         List<String> params = fn.decl().params();
         List<String> paramTypes = fn.decl().paramTypes();
@@ -906,6 +943,8 @@ public class Interpreter {
               String.format("[%s] Error: Módulo no encontrado: '%s'", currentFile, nv.namespace()));
         yield mod.env().get(nv.member());
       }
+
+      case AST.Lambda l -> new LambdaValue(l, env);
 
       default -> execute(node, env);
     };
