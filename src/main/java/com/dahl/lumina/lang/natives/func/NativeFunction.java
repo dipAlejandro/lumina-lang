@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.dahl.lumina.lang.Interpreter;
 /**
  * NativeFunction
  */
@@ -12,7 +13,7 @@ public sealed class NativeFunction
 
   @FunctionalInterface
   public interface NativeImpl {
-    Object call(List<Object> args, int line, String file);
+    Object call(List<Object> args, int line, String file, Interpreter interpreter);
   }
 
   private record Native(String name, int arity, NativeImpl impl) {
@@ -28,16 +29,16 @@ public sealed class NativeFunction
     return natives.containsKey(name);
   }
 
-  public static Object call(String name, List<Object> evaluatedArgs, int line, String file) {
+  public static Object call(String name, List<Object> evaluatedArgs, int line, String file, Interpreter interpreter) {
     Native fn = natives.get(name);
 
     if (fn == null)
       throw new RuntimeException(String.format("[%s:%d] Error: Función nativa '%s' no encontrada", file, line, name));
 
-    if (fn.arity() != evaluatedArgs.size())
+    if (fn.arity() != -1  && fn.arity() != evaluatedArgs.size())
       throw new RuntimeException(String.format("[%s:%d] Error: '%s()' espera %d argumento(s), recibió %d", file, line,
           name, fn.arity(), evaluatedArgs.size()));
-    return fn.impl().call(evaluatedArgs, line, file);
+    return fn.impl().call(evaluatedArgs, line, file, interpreter);
   }
 
 }

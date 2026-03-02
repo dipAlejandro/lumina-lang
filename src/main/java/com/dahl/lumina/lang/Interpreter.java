@@ -1,13 +1,8 @@
 package com.dahl.lumina.lang;
 
-import java.awt.image.renderable.ParameterBlock;
-import java.beans.BeanDescriptor;
 import java.io.IOException;
-import java.lang.annotation.Target;
-import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -456,6 +451,140 @@ public class Interpreter {
               Object target2 = evaluate(args.get(0), env);
               yield list.stream().anyMatch(e -> isEqual(e, target2));
             }
+
+            // MÉTODOS QUE ACEPTAN LAMBDAS
+
+            case "map" -> {
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.map(lambda) espera 1 argumento, recibió %d", currentFile,
+                        args.size()));
+
+              Object arg = evaluate(args.get(0), env);
+
+              if (!(arg instanceof LambdaValue lv))
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.map(lambda) esperaba una lambda, recibió %s", currentFile,
+                        arg.getClass().getSimpleName().toLowerCase()));
+
+              List<Object> result = new ArrayList<>();
+              for (Object el : list)
+                result.add(callLambda(lv, List.of(el)));
+              yield result;
+            }
+
+            case "filter" -> {
+
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.filter(lambda) espera 1 argumento, recibió %d", currentFile,
+                        args.size()));
+
+              Object arg = evaluate(args.get(0), env);
+
+              if (!(arg instanceof LambdaValue lv))
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.filter(lambda) esperaba una lambda, recibió %s", currentFile,
+                        arg.getClass().getSimpleName().toLowerCase()));
+
+              List<Object> result = new ArrayList<>();
+              for (Object el : list) {
+                Object test = callLambda(lv, List.of(el));
+
+                if (test instanceof Boolean b && b)
+                  result.add(el);
+                else if (test instanceof Double d && d != 0)
+                  result.add(el);
+              }
+              yield result;
+
+            }
+
+            case "reduce" -> {
+              if (args.size() != 2)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.reduce(lambda, init) espera 2 argumentos, recibió %d", currentFile,
+                        args.size()));
+
+              Object arg = evaluate(args.get(0), env);
+
+              if (!(arg instanceof LambdaValue lv))
+                throw new RuntimeException(
+                    String.format(
+                        "[%s] Error: array.reduce(lambda, init) esperaba una lambda como primer argumento, recibió %s",
+                        currentFile,
+                        arg.getClass().getSimpleName().toLowerCase()));
+
+              Object acc = evaluate(args.get(1), env);
+
+              for (Object el : list)
+                acc = callLambda(lv, List.of(acc, el));
+
+              yield acc;
+            }
+
+            case "find" -> {
+              if (args.size() != 1)
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.find(el) espera 1 argumento, recibió %d", currentFile,
+                        args.size()));
+
+              Object arg = evaluate(args.get(0), env);
+
+              if (!(arg instanceof LambdaValue lv))
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.find(lambda) esperaba una lambda, recibió %s", currentFile,
+                        arg.getClass().getSimpleName().toLowerCase()));
+
+              for (Object el : list) {
+                Object test = callLambda(lv, List.of(el));
+
+                if (test instanceof Boolean b && b)
+                  yield el;
+                if (test instanceof Double d && d != 0)
+                  yield el;
+              }
+
+              yield null;
+            }
+
+            case "sort" -> {
+              List<Object> result = new ArrayList<>(list);
+              if (args.isEmpty()) {
+                // Ordenamiento natural
+                result.sort((a, b) -> {
+                  if (a instanceof Double da && b instanceof Double db)
+                    return Double.compare(da, db);
+
+                  return stringify(a).compareTo(stringify(b));
+                });
+              } else if (args.size() == 1) {
+                // Ordenamiento con comparador
+                Object arg = evaluate(args.get(0), env);
+
+                if (!(arg instanceof LambdaValue lv))
+                  throw new RuntimeException(
+                      String.format("[%s] Error: array.sort(lambda) esperaba una lambda como comparador, recibió %s",
+                          currentFile,
+                          arg.getClass().getSimpleName().toLowerCase()));
+
+                result.sort((a, b) -> {
+                  Object r = callLambda(lv, List.of(a, b));
+                  if (r instanceof Double d)
+                    return (int) d.doubleValue();
+
+                  throw new RuntimeException(
+                      String.format("[%s] Error: El comparador de sort(lambda) debe retornar un número",
+                          currentFile));
+                });
+              } else {
+                throw new RuntimeException(
+                    String.format("[%s] Error: array.sort(lambda) espera 0 o 1 argumento(s), recibió %d", currentFile,
+                        args.size()));
+              }
+              yield result;
+            }
+
             default -> throw new RuntimeException(
                 String.format("[%s] Error: Método de array desconocido: '%s'", currentFile, method));
           };
@@ -737,7 +866,7 @@ public class Interpreter {
           List<Object> evaluatedArgs = new ArrayList<>();
           for (AST.Node arg : fc.args())
             evaluatedArgs.add(evaluate(arg, env));
-          yield NativeFunction.call(fc.callee(), evaluatedArgs, fc.line(), currentFile);
+          yield NativeFunction.call(fc.callee(), evaluatedArgs, fc.line(), currentFile, this);
         }
 
         // Lambda almacenada en variables
@@ -949,6 +1078,31 @@ public class Interpreter {
       default -> execute(node, env);
     };
 
+  }
+
+  public Object callLambda(LambdaValue lv, List<Object> args) {
+    List<String> params = lv.decl().params();
+
+    if (params.size() != args.size())
+      throw new RuntimeException(
+          String.format("Lambda espera %d argumento(s), recibió %d", params.size(), args.size()));
+
+    Environment callEnv = new Environment(lv.closure());
+
+    for (int i = 0; i < params.size(); i++)
+      callEnv.define(params.get(i), args.get(i));
+
+    try {
+
+      if (lv.decl().body() instanceof AST.Block block) {
+        execute(block, callEnv);
+        return null;
+      } else {
+        return evaluate(lv.decl().body(), callEnv);
+      }
+    } catch (ReturnSignal rs) {
+      return rs.value;
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

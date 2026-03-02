@@ -8,7 +8,7 @@ import com.dahl.lumina.lang.natives.func.NativeFunction;
 public final class NativeTypeFunction extends NativeFunction {
 
   static {
-    reg("to_int", 1, (args, line, file) -> {
+    reg("to_int", 1, (args, line, file, interpreter) -> {
       Object val = args.get(0);
 
       if (val instanceof Double d)
@@ -27,7 +27,7 @@ public final class NativeTypeFunction extends NativeFunction {
           String.format("[%s.%d] Error: to_int() no puede convertir el valor dado", file, line));
     });
 
-    reg("to_float", 1, (args, line, file) -> {
+    reg("to_float", 1, (args, line, file, interpreter) -> {
       Object val = args.get(0);
 
       if (val instanceof Double d)
@@ -46,7 +46,7 @@ public final class NativeTypeFunction extends NativeFunction {
           String.format("[%s.%d] Error: to_float() no puede convertir el valor dado", file, line));
     });
 
-    reg("to_str", 1, (args, line, file) -> {
+    reg("to_str", 1, (args, line, file, interpreter) -> {
       Object val = args.get(0);
 
       if (val == null)
@@ -60,7 +60,7 @@ public final class NativeTypeFunction extends NativeFunction {
       return val.toString();
     });
 
-    reg("to_bool", 1, (args, line, file) -> {
+    reg("to_bool", 1, (args, line, file, interpreter) -> {
       Object val = args.get(0);
 
       if (val instanceof Double d)
@@ -69,9 +69,11 @@ public final class NativeTypeFunction extends NativeFunction {
         return b;
       if (val instanceof String s) {
 
-      if(s.equals("true")) return true;
-      if(s.equals("false")) return false;
-      
+        if (s.equals("true"))
+          return true;
+        if (s.equals("false"))
+          return false;
+
         throw new RuntimeException(
             String.format("[%s:%d] Error: to_bool() no puede convertir '%s' a int", file, line, s));
 

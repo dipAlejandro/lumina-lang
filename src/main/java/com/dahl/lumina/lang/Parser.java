@@ -449,7 +449,7 @@ public class Parser {
     }
 
     // Constructores de tipos
-    if (check(ARRAY) && peek(1).type == LPAREN) {
+    if (check(IDENTIFIER) && current().value.equals("array_of") && peek(1).type == LPAREN) {
       advance();
       consume(LPAREN);
       List<AST.Node> elements = new ArrayList<>();
@@ -462,7 +462,7 @@ public class Parser {
       return new AST.ArrayLiteral(elements);
     }
 
-    if (check(MAP) && peek(1).type == LPAREN) {
+    if (check(IDENTIFIER) && current().value.equals("map_of") && peek(1).type == LPAREN) {
       advance();
       consume(LPAREN);
       List<String> keys = new ArrayList<>();
@@ -486,7 +486,7 @@ public class Parser {
       return new AST.MapLiteral(keys, values);
     }
 
-    if (check(SET) && peek(1).type == LPAREN) {
+    if (check(IDENTIFIER) && current().value.equals("set_of") && peek(1).type == LPAREN) {
       advance();
       consume(LPAREN);
       List<AST.Node> elements = new ArrayList<>();
@@ -516,26 +516,33 @@ public class Parser {
 
       // Acceso a propiedad o método: arr.length, arr.push(x), namespace.fun()
       if (match(DOT)) {
-        String member = consume(IDENTIFIER).value;
-        if (match(LPAREN)) {
-          List<AST.Node> args = new ArrayList<>();
-          if (!check(RPAREN)) {
-            args.add(parseExpression());
-            while (match(COMMA))
+        AST.Node target = new AST.Var(name);
+
+        do {
+          String member = advance().value;
+          if (match(LPAREN)) {
+            List<AST.Node> args = new ArrayList<>();
+            if (!check(RPAREN)) {
               args.add(parseExpression());
+              while (match(COMMA))
+                args.add(parseExpression());
+            }
+            consume(RPAREN);
+            if (target instanceof AST.Var v && moduleNames.contains(v.name())) {
+              target = new AST.NamespaceCall(v.name(), member, args);
+            } else {
+              target = new AST.MethodCall(target, member, args);
+            }
+          } else {
+            if (target instanceof AST.Var v && moduleNames.contains(v.name())) {
+              target = new AST.NamespaceVar(v.name(), member);
+            } else {
+              target = new AST.PropertyAccess(target, member);
+            }
           }
-          consume(RPAREN);
-          // Si es namespace conocido → NamespaceCall, si no → MethodCall
-          if (moduleNames.contains(name)) {
-            return new AST.NamespaceCall(name, member, args);
-          }
-          return new AST.MethodCall(new AST.Var(name), member, args);
-        }
-        // Propiedad sin paréntesis: arr.length o namespace.PI
-        if (moduleNames.contains(name)) {
-          return new AST.NamespaceVar(name, member);
-        }
-        return new AST.PropertyAccess(new AST.Var(name), member);
+        } while (match(DOT)); // ← seguir mientras haya más '.'
+
+        return target;
       }
 
       // Llamada a función o proc
@@ -674,5 +681,14 @@ public class Parser {
       }
     }
     return false;
+  }
+
+  private Token consumeMemberName() {
+    // Acepta IDENTIFIER o cualquier keyword como nombre de método/propiedad
+    if (check(IDENTIFIER) || checkType() || check(MAP) || check(SET) || check(ARRAY))
+      return advance();
+    throw new RuntimeException(
+        "Se esperaba un nombre de método en línea " + current().line +
+            " pero se encontró '" + current().value + "'");
   }
 }
