@@ -1140,7 +1140,7 @@ public class Interpreter {
     throw new RuntimeException("Valor no numérico: " + stringify(value));
   }
 
-  private String stringify(Object value) {
+  public String stringify(Object value) {
     if (value == null)
       return "null";
     if (value instanceof Double d) {
