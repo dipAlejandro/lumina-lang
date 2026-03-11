@@ -25,6 +25,11 @@ public record Break() implements Node {}
 public record Continue() implements Node {}
 public record ProcDecl(String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
 public record FunDecl(String returnType, String name, List<String> paramTypes, List<String> params, Block body) implements Node {}
+public record FieldDecl(String type, String name, Node defaultValue) implements Node {}
+public record StructDecl(String name, List<FieldDecl> fields) implements Node {}
+public record StructCreate(String name, List<String> argNames, List<Node> argValues) implements Node {}
+public record MethodDecl(String name, List<String> params, List<String> paramTypes, String returnType, Block body) implements Node {}
+public record ImplDecl(String structName, List<MethodDecl> methods) implements Node {}
 public record Return(Node value) implements Node {}
 public record Print(Node value) implements Node {}
 public record Block(List<Node> statements) implements Node {}

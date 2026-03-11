@@ -55,10 +55,17 @@ public class Interpreter {
   record Module(Environment env, Map<String, Callable> callables) {
   }
 
+  record StructDef(String name, List<AST.FieldDecl> fields, Map<String, AST.MethodDecl> methods) {
+  }
+
+  public record StructInstance(String typeName, Map<String, Object> fields) {
+  }
+
   private final Environment global = new Environment();
   private final Map<String, Function> functions = new HashMap<>();
   private final Map<String, Procedure> procedures = new HashMap<>();
   private final Map<String, Module> modules = new HashMap<>();
+  private final Map<String, StructDef> structs = new HashMap<>();
   private Module currentModule = null; // null = scope global
 
   private String currentFile = "<main>";
@@ -77,13 +84,18 @@ public class Interpreter {
     }
     // Primer paso: registrar funciones
     for (AST.Node stmt : program.statements()) {
-      if (stmt instanceof AST.FunDecl fd) {
+      if (stmt instanceof AST.FunDecl fd)
         functions.put(fd.name(), new Function(fd, global));
-      }
+
+      if (stmt instanceof AST.StructDecl sd)
+        execute(stmt, global);
+
+      if (stmt instanceof AST.ImplDecl id)
+        execute(stmt, global);
     }
     // Segundo paso: ejecutar
     for (AST.Node stmt : program.statements()) {
-      if (!(stmt instanceof AST.FunDecl))
+      if (!(stmt instanceof AST.FunDecl) && !(stmt instanceof AST.StructDecl) && !(stmt instanceof AST.ImplDecl))
         execute(stmt, global);
     }
   }
@@ -144,6 +156,22 @@ public class Interpreter {
           TypeChecker.check(v.type(), val, v.name(), currentFile, v.line());
         env.define(v.name(), val);
         env.defineType(v.name(), v.type());
+        yield null;
+      }
+
+      case AST.StructDecl sd -> {
+        structs.put(sd.name(), new StructDef(sd.name(), sd.fields(), new HashMap<>()));
+        yield null;
+      }
+
+      case AST.ImplDecl id -> {
+        StructDef def = structs.get(id.structName());
+        if (def == null)
+          throw new RuntimeException(
+              String.format("[%s] Error: impl para Struct '%s' no definido", currentFile, id.structName()));
+        for (AST.MethodDecl method : id.methods())
+          def.methods().put(method.name(), method);
+
         yield null;
       }
 
@@ -285,8 +313,67 @@ public class Interpreter {
         yield elements;
       }
 
+      case AST.StructCreate sc -> {
+        StructDef def = structs.get(sc.name());
+
+        if (def == null)
+          throw new RuntimeException(
+              String.format("[%s] Error: Struct ''%s' no definido", currentFile, sc.name()));
+
+        Map<String, Object> fieldValues = new LinkedHashMap<>();
+
+        // Inicializar con defaults
+        for (AST.FieldDecl field : def.fields()) {
+
+          if (field.defaultValue() != null)
+            fieldValues.put(field.name(), evaluate(field.defaultValue(), env));
+          else
+            fieldValues.put(field.name(), null);
+        }
+
+        // Sobreescribir con valores provistos
+        for (int i = 0; i < sc.argNames().size(); i++) {
+          String argName = sc.argNames().get(i);
+          // validar que el campo existe
+          if (!fieldValues.containsKey(argName))
+            throw new RuntimeException(
+                String.format("[%s] Error: '%s' no es un campo de '%s'", currentFile, argName, sc.name()));
+
+          Object val = evaluate(sc.argValues().get(i), env);
+          // Validar tipo
+          AST.FieldDecl fieldDecl = def.fields().stream()
+              .filter(f -> f.name().equals(argName))
+              .findFirst().get();
+
+          if (!fieldDecl.type().equals("any"))
+            TypeChecker.check(fieldDecl.type(), val, sc.name() + "." + argName, currentFile, 0);
+          fieldValues.put(argName, val);
+        }
+
+        // Validar campos obligatorios (sin default y no provistos)
+        for (AST.FieldDecl field : def.fields()) {
+          if (field.defaultValue() == null && fieldValues.get(field.name()) == null
+              && !sc.argNames().contains(field.name()))
+            throw new RuntimeException(
+                String.format("[%s] Error: Campo obligatorio '%s' no fue provisto en '%s'", currentFile, field.name(),
+                    sc.name()));
+        }
+
+        yield new StructInstance(sc.name(), fieldValues);
+
+      }
+
       case AST.PropertyAccess pa -> {
         Object target = evaluate(pa.object(), env);
+
+        if (target instanceof StructInstance si) {
+          if (!si.fields().containsKey(pa.property()))
+            throw new RuntimeException(
+                String.format("[%s] Error: '%s' no tiene campo '%s'", currentFile, si.typeName(), pa.property()));
+
+          yield si.fields().get(pa.property());
+        }
+
         yield switch (pa.property()) {
           case "len" -> {
             if (target instanceof List<?> list)
@@ -319,6 +406,46 @@ public class Interpreter {
         Object target = evaluate(mc.object(), env);
         String method = mc.method();
         var args = mc.args();
+
+        if (target instanceof StructInstance si) {
+          StructDef def = structs.get(si.typeName());
+
+          if (def == null || !def.methods().containsKey(method))
+            throw new RuntimeException(
+                String.format("[%s] Error: '%s' no contiene metodo '%s'", currentFile, si.typeName(), method));
+
+          AST.MethodDecl md = def.methods().get(method);
+
+          // Validar argumentos
+          if (args.size() != md.params().size())
+            throw new RuntimeException(
+                String.format("[%s] Error: '%s.%s' espera %d argumento(s), recibió %d", currentFile, si.typeName(),
+                    method, md.params().size(), args.size()));
+
+          // Crear entorno con campos del Struct como variables
+          Environment methodEnv = new Environment(global);
+
+          for (Map.Entry<String, Object> entry : si.fields().entrySet())
+            methodEnv.define(entry.getKey(), entry.getValue());
+
+          // Agregar parametros
+          for (int i = 0; i < md.params().size(); i++) {
+            Object value = evaluate(args.get(i), env);
+            methodEnv.define(md.params().get(i), value);
+          }
+
+          // Ejecutar body
+          try {
+
+            for (AST.Node stmt : md.body().statements())
+              execute(stmt, methodEnv);
+
+          } catch (ReturnSignal rs) {
+            yield rs.value;
+          }
+
+          yield null;
+        }
 
         // strings
         if (target instanceof String str) {
@@ -1149,6 +1276,19 @@ public class Interpreter {
         return String.valueOf(d.longValue());
 
       return d.toString();
+    }
+
+    if (value instanceof StructInstance si) {
+      StringBuilder sb = new StringBuilder(si.typeName() + "{");
+      int i = 0;
+      for (Map.Entry<String, Object> entry : si.fields().entrySet()) {
+        sb.append(entry.getKey()).append(": ").append(stringify(entry.getValue()));
+        if (i < si.fields().size() - 1)
+          sb.append(", ");
+        i++;
+      }
+      sb.append(" }");
+      return sb.toString();
     }
     return value.toString();
   }

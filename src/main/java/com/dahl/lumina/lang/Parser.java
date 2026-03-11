@@ -20,6 +20,7 @@ public class Parser {
   private final List<Token> tokens;
   private final Set<String> procNames = new HashSet<>();
   private final Set<String> constNames = new HashSet<>();
+  private final Set<String> structNames = new HashSet<>();
   private final Set<String> moduleNames = new HashSet<>();
   private int pos = 0;
 
@@ -30,7 +31,7 @@ public class Parser {
   // Entry point
   public AST.Program parse() {
 
-    // Primera pasada: Registrar que nombres son procs
+    // Primera pasada: Registrar que nombres son procs, constn modulos y structs
     for (Token t : tokens) {
       if (t.type == IMPORT) {
         int idx = tokens.indexOf(t) + 1;
@@ -44,6 +45,11 @@ public class Parser {
       if (t.type == PROC) {
         int idx = tokens.indexOf(t) + 1;
         procNames.add(tokens.get(idx).value);
+      }
+
+      if (t.type == STRUCT) {
+        int idx = tokens.indexOf(t) + 1;
+        structNames.add(tokens.get(idx).value);
       }
     }
 
@@ -87,6 +93,10 @@ public class Parser {
       return parseBreak();
     if (check(CONTINUE))
       return parseContinue();
+    if (check(STRUCT))
+      return parseStructDecl();
+    if (check(IMPL))
+      return parseImplDecl();
     return parseExprStatement();
   }
 
@@ -303,6 +313,73 @@ public class Parser {
     throw new RuntimeException("Se esperaba fun, proc o var después de export en línea " + current().line);
   }
 
+  private AST.StructDecl parseStructDecl() {
+    consume(STRUCT);
+    String name = consume(IDENTIFIER).value;
+    consume(LBRACE);
+
+    List<AST.FieldDecl> fields = new ArrayList<>();
+
+    while (!check(RBRACE)) {
+      String type = checkType() ? consumeType() : "any";
+      String fieldName = consume(IDENTIFIER).value;
+      AST.Node defaultValue = null;
+
+      if (match(ASSIGN))
+        defaultValue = parseExpression();
+
+      consume(SEMICOLON);
+      fields.add(new AST.FieldDecl(type, fieldName, defaultValue));
+    }
+    consume(RBRACE);
+    return new AST.StructDecl(name, fields);
+  }
+
+  private AST.ImplDecl parseImplDecl() {
+
+    /*
+     * impl structName {
+     * fun type name() { }
+     * ...
+     * }
+     */
+
+    consume(IMPL);
+    String structName = consume(IDENTIFIER).value;
+    consume(LBRACE);
+
+    List<AST.MethodDecl> methods = new ArrayList<>();
+
+    while (!check(RBRACE)) {
+      consume(FUN);
+
+      String returnType = checkType() ? consumeType() : "any";
+      String methodName = consume(IDENTIFIER).value;
+
+      consume(LPAREN);
+
+      List<String> params = new ArrayList<>();
+      List<String> paramTypes = new ArrayList<>();
+
+      if (!check(RPAREN)) {
+        do {
+          String ptype = checkType() ? consumeType() : "any";
+          String pname = consume(IDENTIFIER).value;
+
+          paramTypes.add(ptype);
+          params.add(pname);
+
+        } while (match(COMMA));
+      }
+
+      consume(RPAREN);
+      AST.Block body = parseBlock();
+      methods.add(new AST.MethodDecl(methodName, params, paramTypes, returnType, body));
+    }
+    consume(RBRACE);
+    return new AST.ImplDecl(structName, methods);
+  }
+
   // ── Expressions (precedence climbing) ────────────────────────────────────
 
   private AST.Node parseExpression() {
@@ -507,6 +584,29 @@ public class Parser {
     // Function call, procedure call or variable
     if (check(IDENTIFIER)) {
       String name = advance().value;
+      // Detectar constructor de structs
+      if (structNames.contains(name) && match(LPAREN)) {
+        List<String> argNames = new ArrayList<>();
+        List<AST.Node> argValues = new ArrayList<>();
+
+        if (!check(RPAREN)) {
+          String argName = consume(IDENTIFIER).value;
+          consume(COLON);
+          AST.Node argValue = parseExpression();
+          argNames.add(argName);
+          argValues.add(argValue);
+
+          while (match(COMMA)) {
+            argName = consume(IDENTIFIER).value;
+            consume(COLON);
+            argValue = parseExpression();
+            argNames.add(argName);
+            argValues.add(argValue);
+          }
+        }
+        consume(RPAREN);
+        return new AST.StructCreate(name, argNames, argValues);
+      }
 
       // Sufijo: i++ / i--
       if (check(PLUS_PLUS) || check(MINUS_MINUS)) {
