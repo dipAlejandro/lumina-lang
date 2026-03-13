@@ -549,7 +549,11 @@ public class Interpreter {
                     String.format("[%s] Error: array.push(val) espera 1 argumento, recibió %d", currentFile,
                         args.size()));
 
-              list.add(evaluate(args.get(0), env));
+              try {
+                list.add(evaluate(args.get(0), env));
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("array");
+              }
               yield null;
             }
 
@@ -565,7 +569,11 @@ public class Interpreter {
                     String.format("[%] Error: Índice fuera de rango: %d (tamaño %d)", currentFile, idx, list.size()));
 
               Object val = evaluate(args.get(1), env);
-              list.set(idx, val);
+              try {
+                list.set(idx, val);
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("array");
+              }
               yield val;
 
             }
@@ -579,7 +587,11 @@ public class Interpreter {
                     String.format("[%s] Error: array.pop() no espera argumento, recibió %d", currentFile,
                         args.size()));
 
-              yield list.remove(list.size() - 1);
+              try {
+                yield list.remove(list.size() - 1);
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("array");
+              }
             }
             case "contains" -> {
               if (args.size() != 1)
@@ -738,7 +750,11 @@ public class Interpreter {
                 throw new RuntimeException(
                     String.format("[%s] Error: set.add(elem) espera un argumento, recibió %d", currentFile,
                         args.size()));
-              set.add(evaluate(args.get(0), env));
+              try {
+                set.add(evaluate(args.get(0), env));
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("set");
+              }
               yield null;
             }
 
@@ -749,7 +765,11 @@ public class Interpreter {
                     String.format("[%s] Error: set.remove(val) espera un argumento, recibió %d", currentFile,
                         args.size()));
               Object val = evaluate(args.get(0), env);
-              yield set.remove(val);
+              try {
+                yield set.remove(val);
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("set");
+              }
             }
 
             case "contains" -> {
@@ -816,7 +836,11 @@ public class Interpreter {
 
               String key = stringify(evaluate(args.get(0), env));
               Object value = evaluate(args.get(1), env);
-              yield map.put(key, value);
+              try {
+                yield map.put(key, value);
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("map");
+              }
             }
             case "remove" -> {
               if (mc.args().size() != 1)
@@ -825,7 +849,11 @@ public class Interpreter {
                         args.size()));
 
               String key = stringify(evaluate(args.get(0), env));
-              yield map.remove(key);
+              try {
+                yield map.remove(key);
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("map");
+              }
             }
             case "contains_key" -> {
               if (args.size() != 1)
@@ -867,7 +895,11 @@ public class Interpreter {
                     String.format("[%s] Error: map.clear() no espera argumentos, recibió %d", currentFile,
                         args.size()));
 
-              map.clear();
+              try {
+                map.clear();
+              } catch (UnsupportedOperationException ex) {
+                throw immutableMutationError("map");
+              }
               yield null;
             }
             default -> throw new RuntimeException(
@@ -1303,6 +1335,12 @@ public class Interpreter {
       return sb.toString();
     }
     return value.toString();
+  }
+
+
+  private RuntimeException immutableMutationError(String typeName) {
+    return new RuntimeException(
+        String.format("[%s] Error: No se puede mutar %s almacenado en una constante", currentFile, typeName));
   }
 
   private Module loadModule(AST.Program program) {

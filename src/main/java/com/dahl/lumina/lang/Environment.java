@@ -2,6 +2,9 @@ package com.dahl.lumina.lang;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,8 +31,38 @@ public class Environment {
   }
 
   public void defineConst(String name, Object value) {
-    variables.put(name, value);
+    variables.put(name, freezeValue(value));
     constants.add(name);
+  }
+
+  private Object freezeValue(Object value) {
+    if (value instanceof List<?> list) {
+      return list.stream().map(this::freezeValue).toList();
+    }
+
+    if (value instanceof Set<?> set) {
+      Set<Object> frozen = new LinkedHashSet<>();
+      for (Object element : set)
+        frozen.add(freezeValue(element));
+      return Set.copyOf(frozen);
+    }
+
+    if (value instanceof Map<?, ?> map) {
+      Map<String, Object> frozen = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> entry : map.entrySet())
+        frozen.put(String.valueOf(entry.getKey()), freezeValue(entry.getValue()));
+      return Map.copyOf(frozen);
+    }
+
+    if (value instanceof Interpreter.StructInstance si) {
+      Map<String, Object> frozenFields = new LinkedHashMap<>();
+      for (Map.Entry<String, Object> entry : si.fields().entrySet())
+        frozenFields.put(entry.getKey(), freezeValue(entry.getValue()));
+
+      return new Interpreter.StructInstance(si.typeName(), Map.copyOf(frozenFields));
+    }
+
+    return value;
   }
 
   public Object get(String name) {
