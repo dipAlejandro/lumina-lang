@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.dahl.lumina.lang.AST;
@@ -59,7 +60,10 @@ public class Interpreter {
       Map<String, AST.MethodDecl> methods) {
   }
 
-  public record StructInstance(String typeName, Map<String, Object> fields) {
+  public record StructInstance(String typeName, Map<String, Object> fields, boolean frozen) {
+    public StructInstance(String typeName, Map<String, Object> fields) {
+      this(typeName, fields, false);
+    }
   }
 
   private final Environment global = new Environment();
@@ -371,7 +375,7 @@ public class Interpreter {
                     sc.name()));
         }
 
-        yield new StructInstance(sc.name(), fieldValues);
+        yield new StructInstance(sc.name(), fieldValues, false);
 
       }
 
@@ -414,6 +418,39 @@ public class Interpreter {
         };
       }
 
+      case AST.PropertyAssign pa -> {
+        Object target = evaluate(pa.object(), env);
+
+        if (!(target instanceof StructInstance si))
+          throw new RuntimeException(
+              String.format("[%s] Error: Asignación de propiedad solo permitida sobre structs", currentFile));
+
+        StructDef def = structs.get(si.typeName());
+        if (def == null)
+          throw new RuntimeException(
+              String.format("[%s] Error: Struct '%s' no definido", currentFile, si.typeName()));
+
+        AST.FieldDecl fieldDecl = def.fieldIndex().get(pa.property());
+        if (fieldDecl == null)
+          throw new RuntimeException(
+              String.format("[%s] Error: '%s' no tiene campo '%s'", currentFile, si.typeName(), pa.property()));
+
+        Object value = evaluate(pa.value(), env);
+        if (!fieldDecl.type().equals("any"))
+          TypeChecker.check(fieldDecl.type(), value, si.typeName() + "." + pa.property(), currentFile, 0);
+
+        if (si.frozen())
+          throw immutableMutationError("struct");
+
+        try {
+          si.fields().put(pa.property(), value);
+        } catch (UnsupportedOperationException ex) {
+          throw immutableMutationError("struct");
+        }
+
+        yield value;
+      }
+
       case AST.MethodCall mc -> {
         Object target = evaluate(mc.object(), env);
         String method = mc.method();
@@ -434,11 +471,16 @@ public class Interpreter {
                 String.format("[%s] Error: '%s.%s' espera %d argumento(s), recibió %d", currentFile, si.typeName(),
                     method, md.params().size(), args.size()));
 
-          // Crear entorno con campos del Struct como variables
+          // Crear entorno de método y pasar self como referencia de instancia
           Environment methodEnv = new Environment(global);
+          methodEnv.define("self", si);
 
-          for (Map.Entry<String, Object> entry : si.fields().entrySet())
+          // Exponer campos como alias de conveniencia
+          Map<String, Object> initialFieldValues = new HashMap<>();
+          for (Map.Entry<String, Object> entry : si.fields().entrySet()) {
             methodEnv.define(entry.getKey(), entry.getValue());
+            initialFieldValues.put(entry.getKey(), entry.getValue());
+          }
 
           // Agregar parametros
           for (int i = 0; i < md.params().size(); i++) {
@@ -446,17 +488,38 @@ public class Interpreter {
             methodEnv.define(md.params().get(i), value);
           }
 
+          Object methodResult = null;
+
           // Ejecutar body
           try {
-
             for (AST.Node stmt : md.body().statements())
               execute(stmt, methodEnv);
-
           } catch (ReturnSignal rs) {
-            yield rs.value;
+            methodResult = rs.value;
           }
 
-          yield null;
+          // Persistir cambios hechos sobre alias de campos al struct real
+          for (AST.FieldDecl field : def.fields()) {
+            Object envFieldValue = methodEnv.get(field.name());
+            Object initialFieldValue = initialFieldValues.get(field.name());
+            Object fieldValue = Objects.equals(envFieldValue, initialFieldValue)
+                ? si.fields().get(field.name())
+                : envFieldValue;
+
+            if (!field.type().equals("any"))
+              TypeChecker.check(field.type(), fieldValue, si.typeName() + "." + field.name(), currentFile, 0);
+
+            if (si.frozen())
+              throw immutableMutationError("struct");
+
+            try {
+              si.fields().put(field.name(), fieldValue);
+            } catch (UnsupportedOperationException ex) {
+              throw immutableMutationError("struct");
+            }
+          }
+
+          yield methodResult;
         }
 
         // strings

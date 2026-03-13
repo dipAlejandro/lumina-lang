@@ -396,15 +396,6 @@ public class Parser {
       return new AST.CompoundAssign(name, op, parseExpression());
     }
 
-    // Asignación simple: i = expr
-    if (check(IDENTIFIER) && peek(1).type == ASSIGN) {
-      String name = consume(IDENTIFIER).value;
-      if (constNames.contains(name))
-        throw new RuntimeException("No se puede reasignar la constante '" + name + "' en línea " + current().line);
-      consume(ASSIGN);
-      return new AST.Assign(name, parseExpression());
-    }
-
     // Sufijo: i++ / i--
     if (check(IDENTIFIER) && isSuffixIncrement(peek(1).type)) {
       String name = consume(IDENTIFIER).value;
@@ -414,7 +405,24 @@ public class Parser {
       return new AST.Increment(name, op, false);
     }
 
-    return parseTernary();
+    AST.Node target = parseTernary();
+
+    // Asignación simple: i = expr o expr.campo = expr
+    if (match(ASSIGN)) {
+      if (target instanceof AST.Var v) {
+        if (constNames.contains(v.name()))
+          throw new RuntimeException(
+              "No se puede reasignar la constante '" + v.name() + "' en línea " + current().line);
+        return new AST.Assign(v.name(), parseExpression());
+      }
+
+      if (target instanceof AST.PropertyAccess pa)
+        return new AST.PropertyAssign(pa.object(), pa.property(), parseExpression());
+
+      throw new RuntimeException("Objetivo de asignación inválido en línea " + current().line);
+    }
+
+    return target;
   }
 
   private AST.Node parseTernary() {

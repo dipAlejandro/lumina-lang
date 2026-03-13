@@ -59,7 +59,7 @@ public class Environment {
       for (Map.Entry<String, Object> entry : si.fields().entrySet())
         frozenFields.put(entry.getKey(), freezeValue(entry.getValue()));
 
-      return new Interpreter.StructInstance(si.typeName(), Map.copyOf(frozenFields));
+      return new Interpreter.StructInstance(si.typeName(), Map.copyOf(frozenFields), true);
     }
 
     return value;

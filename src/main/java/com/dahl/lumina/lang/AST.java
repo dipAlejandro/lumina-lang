@@ -57,6 +57,7 @@ public record NamespaceCall(String namespace, String member, List<Node> args) im
 public record NamespaceVar(String namespace, String member) implements Node {}
 public record MethodCall(Node object, String method, List<Node> args) implements Node {}
 public record PropertyAccess(Node object, String property) implements Node {}
+public record PropertyAssign(Node object, String property, Node value) implements Node {}
 public record Var(String name) implements Node {}
 public record Literal(Object value) implements Node {}
 public record Increment (String name, String op, boolean prefix) implements Node {}
