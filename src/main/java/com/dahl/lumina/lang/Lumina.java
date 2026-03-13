@@ -8,6 +8,11 @@ public class Lumina {
 
   public static void main(String[] args) {
 
+    if (args.length != 1) {
+      System.err.println("Uso: java -jar interpreter.jar <archivo.lum>");
+      return;
+    }
+
     System.out.println("┌─────────────────────────────────────┐");
     System.out.println("│     Intérprete Lumina - Lang v1.0   │");
     System.out.println("└─────────────────────────────────────┘");

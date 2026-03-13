@@ -7,6 +7,16 @@ import com.dahl.lumina.lang.natives.func.NativeFunction;
  */
 public final class NativeTypeFunction extends NativeFunction {
 
+  private static RuntimeException conversionError(String function, String file, int line, String value, String target) {
+    return new RuntimeException(
+        String.format("[%s:%d] Error: %s() no puede convertir '%s' a %s", file, line, function, value, target));
+  }
+
+  private static RuntimeException genericConversionError(String function, String file, int line) {
+    return new RuntimeException(
+        String.format("[%s:%d] Error: %s() no puede convertir el valor dado", file, line, function));
+  }
+
   static {
     reg("to_int", 1, (args, line, file, interpreter) -> {
       Object val = args.get(0);
@@ -19,12 +29,10 @@ public final class NativeTypeFunction extends NativeFunction {
         try {
           return (double) Integer.parseInt(s.trim());
         } catch (NumberFormatException e) {
-          throw new RuntimeException(
-              String.format("[%s:%d] Error: to_int() no puede convertir '%s' a int", file, line, s));
+          throw conversionError("to_int", file, line, s, "int");
         }
       }
-      throw new RuntimeException(
-          String.format("[%s.%d] Error: to_int() no puede convertir el valor dado", file, line));
+      throw genericConversionError("to_int", file, line);
     });
 
     reg("to_float", 1, (args, line, file, interpreter) -> {
@@ -36,14 +44,12 @@ public final class NativeTypeFunction extends NativeFunction {
         return b ? 1.0 : 0.0;
       if (val instanceof String s) {
         try {
-          return (double) Integer.parseInt(s.trim());
+          return Double.parseDouble(s.trim());
         } catch (NumberFormatException e) {
-          throw new RuntimeException(
-              String.format("[%s:%d] Error: to_float() no puede convertir '%s' a float", file, line, s));
+          throw conversionError("to_float", file, line, s, "float");
         }
       }
-      throw new RuntimeException(
-          String.format("[%s.%d] Error: to_float() no puede convertir el valor dado", file, line));
+      throw genericConversionError("to_float", file, line);
     });
 
     reg("to_str", 1, (args, line, file, interpreter) -> {
@@ -74,12 +80,10 @@ public final class NativeTypeFunction extends NativeFunction {
         if (s.equals("false"))
           return false;
 
-        throw new RuntimeException(
-            String.format("[%s:%d] Error: to_bool() no puede convertir '%s' a int", file, line, s));
+        throw conversionError("to_bool", file, line, s, "bool");
 
       }
-      throw new RuntimeException(
-          String.format("[%s.%d] Error: to_bool() no puede convertir el valor dado", file, line));
+      throw genericConversionError("to_bool", file, line);
     });
   }
 }
