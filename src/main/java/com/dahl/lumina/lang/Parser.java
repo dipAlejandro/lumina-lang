@@ -32,25 +32,24 @@ public class Parser {
   public AST.Program parse() {
 
     // Primera pasada: Registrar que nombres son procs, constn modulos y structs
-    for (Token t : tokens) {
-      if (t.type == IMPORT) {
-        int idx = tokens.indexOf(t) + 1;
-        moduleNames.add(tokens.get(idx).value);
-      }
+    for (int i = 0; i < tokens.size(); i++) {
+      Token t = tokens.get(i);
+      int nextIdx = i + 1;
 
-      if (t.type == CONST) {
-        int idx = tokens.indexOf(t) + 1;
-        constNames.add(tokens.get(idx).value);
-      }
-      if (t.type == PROC) {
-        int idx = tokens.indexOf(t) + 1;
-        procNames.add(tokens.get(idx).value);
-      }
+      if (nextIdx >= tokens.size())
+        continue;
 
-      if (t.type == STRUCT) {
-        int idx = tokens.indexOf(t) + 1;
-        structNames.add(tokens.get(idx).value);
-      }
+      if (t.type == IMPORT)
+        moduleNames.add(tokens.get(nextIdx).value);
+
+      if (t.type == CONST)
+        constNames.add(tokens.get(nextIdx).value);
+
+      if (t.type == PROC)
+        procNames.add(tokens.get(nextIdx).value);
+
+      if (t.type == STRUCT)
+        structNames.add(tokens.get(nextIdx).value);
     }
 
     // Segunda pasada: parsear normal

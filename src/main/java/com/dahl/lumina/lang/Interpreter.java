@@ -55,7 +55,8 @@ public class Interpreter {
   record Module(Environment env, Map<String, Callable> callables) {
   }
 
-  record StructDef(String name, List<AST.FieldDecl> fields, Map<String, AST.MethodDecl> methods) {
+  record StructDef(String name, List<AST.FieldDecl> fields, Map<String, AST.FieldDecl> fieldIndex,
+      Map<String, AST.MethodDecl> methods) {
   }
 
   public record StructInstance(String typeName, Map<String, Object> fields) {
@@ -65,6 +66,7 @@ public class Interpreter {
   private final Map<String, Function> functions = new HashMap<>();
   private final Map<String, Procedure> procedures = new HashMap<>();
   private final Map<String, Module> modules = new HashMap<>();
+  private final Map<String, Module> modulesByPath = new HashMap<>();
   private final Map<String, StructDef> structs = new HashMap<>();
   private Module currentModule = null; // null = scope global
 
@@ -105,6 +107,14 @@ public class Interpreter {
     return switch (node) {
 
       case AST.Import i -> {
+        if (modules.containsKey(i.namespace()))
+          yield null;
+
+        if (modulesByPath.containsKey(i.path())) {
+          modules.put(i.namespace(), modulesByPath.get(i.path()));
+          yield null;
+        }
+
         String src = "";
         AST.Program program;
         String previousFile = currentFile;
@@ -118,6 +128,7 @@ public class Interpreter {
         }
         Module mod = loadModule(program);
         currentFile = previousFile;
+        modulesByPath.put(i.path(), mod);
         modules.put(i.namespace(), mod);
         yield null;
       }
@@ -160,7 +171,10 @@ public class Interpreter {
       }
 
       case AST.StructDecl sd -> {
-        structs.put(sd.name(), new StructDef(sd.name(), sd.fields(), new HashMap<>()));
+        Map<String, AST.FieldDecl> fieldIndex = new HashMap<>();
+        for (AST.FieldDecl field : sd.fields())
+          fieldIndex.put(field.name(), field);
+        structs.put(sd.name(), new StructDef(sd.name(), sd.fields(), fieldIndex, new HashMap<>()));
         yield null;
       }
 
@@ -341,9 +355,7 @@ public class Interpreter {
 
           Object val = evaluate(sc.argValues().get(i), env);
           // Validar tipo
-          AST.FieldDecl fieldDecl = def.fields().stream()
-              .filter(f -> f.name().equals(argName))
-              .findFirst().get();
+          AST.FieldDecl fieldDecl = def.fieldIndex().get(argName);
 
           if (!fieldDecl.type().equals("any"))
             TypeChecker.check(fieldDecl.type(), val, sc.name() + "." + argName, currentFile, 0);
